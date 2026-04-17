@@ -1,8 +1,8 @@
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
-local clonefunction = (clonefunction or copyfunction or function(func) 
-    return func 
+local clonefunction = (clonefunction or copyfunction or function(func)
+    return func
 end)
 
 local httprequest = request or http_request or (http and http.request)
@@ -48,26 +48,43 @@ end
 
 local ThemeManager = {} do
     local ThemeFields = { "FontColor", "MainColor", "AccentColor", "BackgroundColor", "OutlineColor" }
-    ThemeManager.Folder = "ECLinoriaLibSettings"
+    ThemeManager.Folder = "SFSettings"
     ThemeManager.Library = nil
     ThemeManager.CurrentTheme = "Default"
     ThemeManager.DefaultThemeName = "Default"
 
     ThemeManager.BuiltInThemes = {
-        ['Default']     = { 1, { FontColor = "ffffff", MainColor = "1c1c1c", AccentColor = "0055ff", BackgroundColor = "141414", OutlineColor = "323232" } },
-        ['BBot']        = { 2, { FontColor = "ffffff", MainColor = "1e1e1e", AccentColor = "7e48a3", BackgroundColor = "232323", OutlineColor = "141414" } },
-        ['Fatality']    = { 3, { FontColor = "ffffff", MainColor = "1e1842", AccentColor = "c50754", BackgroundColor = "191335", OutlineColor = "3c355d" } },
-        ['Jester']      = { 4, { FontColor = "ffffff", MainColor = "242424", AccentColor = "db4467", BackgroundColor = "1c1c1c", OutlineColor = "373737" } },
-        ['Mint']        = { 5, { FontColor = "ffffff", MainColor = "242424", AccentColor = "3db488", BackgroundColor = "1c1c1c", OutlineColor = "373737" } },
-        ['Tokyo Night'] = { 6, { FontColor = "ffffff", MainColor = "191925", AccentColor = "6759b3", BackgroundColor = "16161f", OutlineColor = "323232" } },
-        ['Ubuntu']      = { 7, { FontColor = "ffffff", MainColor = "3e3e3e", AccentColor = "e2581e", BackgroundColor = "323232", OutlineColor = "191919" } },
-        ['Quartz']      = { 8, { FontColor = "ffffff", MainColor = "232330", AccentColor = "426e87", BackgroundColor = "1d1b26", OutlineColor = "27232f" } },
+        ['Default']        = {  1, { FontColor = "ffffff", MainColor = "1c1c1c", AccentColor = "f0f0f0", BackgroundColor = "141414", OutlineColor = "323232" } },
+        ['BBot']           = {  2, { FontColor = "ffffff", MainColor = "1e1e1e", AccentColor = "7e48a3", BackgroundColor = "232323", OutlineColor = "141414" } },
+        ['Fatality']       = {  3, { FontColor = "ffffff", MainColor = "1e1842", AccentColor = "c50754", BackgroundColor = "191335", OutlineColor = "3c355d" } },
+        ['Jester']         = {  4, { FontColor = "ffffff", MainColor = "242424", AccentColor = "db4467", BackgroundColor = "1c1c1c", OutlineColor = "373737" } },
+        ['Mint']           = {  5, { FontColor = "ffffff", MainColor = "242424", AccentColor = "3db488", BackgroundColor = "1c1c1c", OutlineColor = "373737" } },
+        ['Tokyo Night']    = {  6, { FontColor = "ffffff", MainColor = "191925", AccentColor = "6759b3", BackgroundColor = "16161f", OutlineColor = "323232" } },
+        ['Ubuntu']         = {  7, { FontColor = "ffffff", MainColor = "3e3e3e", AccentColor = "e2581e", BackgroundColor = "323232", OutlineColor = "191919" } },
+        ['Quartz']         = {  8, { FontColor = "ffffff", MainColor = "232330", AccentColor = "426e87", BackgroundColor = "1d1b26", OutlineColor = "27232f" } },
+        ['Dracula']        = {  9, { FontColor = "f8f8f2", MainColor = "282a36", AccentColor = "bd93f9", BackgroundColor = "1e1f29", OutlineColor = "44475a" } },
+        ['Gruvbox']        = { 10, { FontColor = "ebdbb2", MainColor = "3c3836", AccentColor = "d79921", BackgroundColor = "282828", OutlineColor = "504945" } },
+        ['Nord']           = { 11, { FontColor = "eceff4", MainColor = "3b4252", AccentColor = "88c0d0", BackgroundColor = "2e3440", OutlineColor = "4c566a" } },
+        ['Catppuccin']     = { 12, { FontColor = "cdd6f4", MainColor = "1e1e2e", AccentColor = "cba6f7", BackgroundColor = "181825", OutlineColor = "313244" } },
+        ['Monokai']        = { 13, { FontColor = "f8f8f2", MainColor = "272822", AccentColor = "a6e22e", BackgroundColor = "1e1f1c", OutlineColor = "3e3d32" } },
+        ['Solarized']      = { 14, { FontColor = "839496", MainColor = "073642", AccentColor = "268bd2", BackgroundColor = "002b36", OutlineColor = "0d3d49" } },
+        ['Cyberpunk']      = { 15, { FontColor = "f0f0f0", MainColor = "1a1a2e", AccentColor = "ffee00", BackgroundColor = "0d0d1a", OutlineColor = "2a2a4a" } },
+        ['Midnight Blue']  = { 16, { FontColor = "c8d3f5", MainColor = "1b2038", AccentColor = "4fc1e9", BackgroundColor = "131727", OutlineColor = "293256" } },
+        ['Rose Gold']      = { 17, { FontColor = "fff0f5", MainColor = "2d1c24", AccentColor = "e8a0b4", BackgroundColor = "1e0f17", OutlineColor = "4a2535" } },
+        ['Emerald']        = { 18, { FontColor = "d4f7e0", MainColor = "1a2e24", AccentColor = "2ecc71", BackgroundColor = "111e18", OutlineColor = "274d38" } },
+        ['Crimson Night']  = { 19, { FontColor = "f5c6c6", MainColor = "2a1010", AccentColor = "e53935", BackgroundColor = "1a0808", OutlineColor = "4a1818" } },
+        ['Arctic']         = { 20, { FontColor = "2e3440", MainColor = "e5e9f0", AccentColor = "5e81ac", BackgroundColor = "d8dee9", OutlineColor = "b0baca" } },
     }
 
     local AnimatedThemes = { "Rainbow", "Dark Matter", "Red Inferno" }
     local AnimationConnection = nil
     local CurrentAnimatedTheme = nil
-    local AnimationClock = 0
+
+    local AnimatedThemeVars = {
+        Rainbow     = { clock = 0, speed = 1 },
+        ["Dark Matter"]  = { clock = 0, speed = 1 },
+        ["Red Inferno"]  = { clock = 0, speed = 1 },
+    }
 
     local CurrentThemeLabel = nil
     local DefaultThemeLabel = nil
@@ -113,9 +130,21 @@ local ThemeManager = {} do
             AnimationConnection:Disconnect()
             AnimationConnection = nil
         end
+        if CurrentAnimatedTheme and AnimatedThemeVars[CurrentAnimatedTheme] then
+            AnimatedThemeVars[CurrentAnimatedTheme].clock = 0
+        end
         CurrentAnimatedTheme = nil
-        AnimationClock = 0
         SetColorPickersDisabled(false)
+    end
+
+    local function GetThemeSpeed(themeName)
+        local lib = ThemeManager.Library
+        local vars = AnimatedThemeVars[themeName]
+        local sliderKey = "ThemeManager_Speed_" .. themeName:gsub(" ", "_")
+        if lib and lib.Options[sliderKey] then
+            return lib.Options[sliderKey].Value or 1
+        end
+        return vars and vars.speed or 1
     end
 
     local function StartAnimation(themeName)
@@ -123,19 +152,18 @@ local ThemeManager = {} do
         CurrentAnimatedTheme = themeName
         SetColorPickersDisabled(true)
 
+        local vars = AnimatedThemeVars[themeName]
+        if not vars then return end
+
         local lib = ThemeManager.Library
 
         if themeName == "Rainbow" then
             AnimationConnection = RunService.RenderStepped:Connect(function(delta)
                 if not ThemeManager.Library then return end
-                AnimationClock = AnimationClock + delta
+                vars.clock = vars.clock + delta
 
-                local speed = 1
-                if lib.Options["ThemeManager_RainbowSpeed"] then
-                    speed = lib.Options["ThemeManager_RainbowSpeed"].Value or 1
-                end
-
-                local hue    = (AnimationClock * speed * 0.1) % 1
+                local speed = GetThemeSpeed("Rainbow")
+                local hue    = (vars.clock * speed * 0.1) % 1
                 local accent = Color3.fromHSV(hue, 0.8, 1)
                 local bgHue  = (hue + 0.5) % 1
                 local bg     = Color3.fromHSV(bgHue, 0.6, 0.12)
@@ -153,14 +181,10 @@ local ThemeManager = {} do
         elseif themeName == "Dark Matter" then
             AnimationConnection = RunService.RenderStepped:Connect(function(delta)
                 if not ThemeManager.Library then return end
-                AnimationClock = AnimationClock + delta
+                vars.clock = vars.clock + delta
 
-                local speed = 1
-                if lib.Options["ThemeManager_RainbowSpeed"] then
-                    speed = lib.Options["ThemeManager_RainbowSpeed"].Value or 1
-                end
-
-                local pulse      = (math.sin(AnimationClock * speed * 0.8) + 1) / 2
+                local speed = GetThemeSpeed("Dark Matter")
+                local pulse      = (math.sin(vars.clock * speed * 0.8) + 1) / 2
                 local accentHue  = 0.77
                 local accent     = Color3.fromHSV(accentHue, 0.85, 0.35 + pulse * 0.55)
                 local bg         = Color3.fromHSV(accentHue, 0.6,  0.04 + pulse * 0.07)
@@ -178,14 +202,10 @@ local ThemeManager = {} do
         elseif themeName == "Red Inferno" then
             AnimationConnection = RunService.RenderStepped:Connect(function(delta)
                 if not ThemeManager.Library then return end
-                AnimationClock = AnimationClock + delta
+                vars.clock = vars.clock + delta
 
-                local speed = 1
-                if lib.Options["ThemeManager_RainbowSpeed"] then
-                    speed = lib.Options["ThemeManager_RainbowSpeed"].Value or 1
-                end
-
-                local pulse      = (math.sin(AnimationClock * speed * 0.6) + 1) / 2
+                local speed = GetThemeSpeed("Red Inferno")
+                local pulse      = (math.sin(vars.clock * speed * 0.6) + 1) / 2
                 local accentHue  = pulse * 0.08
                 local accent     = Color3.fromHSV(accentHue, 1, 1)
                 local bg         = Color3.fromHSV(0.02, 0.8,  0.06 + pulse * 0.06)
@@ -247,8 +267,6 @@ local ThemeManager = {} do
         return true
     end
 
-    -- local function ApplyBackgroundVideo(videoLink) ... end  (commented out - unused)
-
     function ThemeManager:SetLibrary(library)
         self.Library = library
     end
@@ -309,7 +327,18 @@ local ThemeManager = {} do
 
         local scheme = customThemeData or data[2]
         for idx, col in next, scheme do
-            if idx == "VideoLink" then continue end
+            if idx == "VideoLink" then
+                if self.Library.InnerVideoBackground and typeof(col) == "string" and col ~= "" then
+                    local url = col:match("^rbxassetid://") and col or ("rbxassetid://" .. col)
+                    self.Library.InnerVideoBackground.Video = url
+                    self.Library.InnerVideoBackground.Playing = true
+                    self.Library.InnerVideoBackground.Visible = true
+                    if self.Library.Options["ThemeManager_VideoURL"] then
+                        self.Library.Options["ThemeManager_VideoURL"]:SetValue(col)
+                    end
+                end
+                continue
+            end
             self.Library[idx] = Color3.fromHex(col)
             if self.Library.Options[idx] then
                 self.Library.Options[idx]:SetValueRGB(Color3.fromHex(col))
@@ -323,10 +352,6 @@ local ThemeManager = {} do
     end
 
     function ThemeManager:ThemeUpdate()
-        if self.Library.InnerVideoBackground ~= nil then
-            self.Library.InnerVideoBackground.Visible = false
-        end
-
         for _, field in next, ThemeFields do
             if self.Library.Options and self.Library.Options[field] then
                 self.Library[field] = self.Library.Options[field].Value
@@ -399,7 +424,40 @@ local ThemeManager = {} do
             end
         end
 
+        if self.Library.InnerVideoBackground and self.Library.InnerVideoBackground.Visible then
+            local vid = self.Library.InnerVideoBackground.Video or ""
+            vid = vid:gsub("^rbxassetid://", "")
+            if vid ~= "" then theme["VideoLink"] = vid end
+        end
+
+        self:CheckFolderTree()
         writefile(self.Folder .. '/themes/' .. file .. '.json', HttpService:JSONEncode(theme))
+    end
+
+    function ThemeManager:ExportTheme(file)
+        if not file or file:gsub(' ', '') == '' then
+            self.Library:Notify('Invalid export name (empty)', 3)
+            return
+        end
+
+        local theme = {}
+        for _, field in next, ThemeFields do
+            if self.Library.Options[field] then
+                theme[field] = self.Library.Options[field].Value:ToHex()
+            end
+        end
+
+        if self.Library.InnerVideoBackground and self.Library.InnerVideoBackground.Visible then
+            local vid = self.Library.InnerVideoBackground.Video or ""
+            vid = vid:gsub("^rbxassetid://", "")
+            if vid ~= "" then theme["VideoLink"] = vid end
+        end
+
+        self:CheckFolderTree()
+        local path = self.Folder .. '/themes/' .. file .. '.json'
+        writefile(path, HttpService:JSONEncode(theme))
+        self.Library:Notify(string.format('Exported theme to %s.json', file))
+        return path
     end
 
     function ThemeManager:Delete(name)
@@ -501,7 +559,7 @@ local ThemeManager = {} do
         table.sort(ThemesArray, function(a, b) return self.BuiltInThemes[a][1] < self.BuiltInThemes[b][1] end)
 
         groupbox:AddDropdown('ThemeManager_ThemeList', {
-            Text    = 'Default Theme List',
+            Text    = 'Built-in Theme List',
             Values  = ThemesArray,
             Default = 1,
         })
@@ -523,22 +581,36 @@ local ThemeManager = {} do
             Default   = 1,
         })
 
-        local RainbowSpeedSlider = groupbox:AddSlider('ThemeManager_RainbowSpeed', {
-            Text     = 'Animation Speed',
-            Default  = 1,
-            Min      = 1,
-            Max      = 10,
-            Rounding = 1,
-            Visible  = false,
-        })
+        local SpeedSliders = {}
+        for _, themeName in ipairs(AnimatedThemes) do
+            local key = "ThemeManager_Speed_" .. themeName:gsub(" ", "_")
+            local slider = groupbox:AddSlider(key, {
+                Text     = themeName .. ' Speed',
+                Default  = 1,
+                Min      = 1,
+                Max      = 10,
+                Rounding = 1,
+                Visible  = false,
+            })
+            slider:OnChanged(function()
+                if AnimatedThemeVars[themeName] then
+                    AnimatedThemeVars[themeName].speed = slider.Value
+                end
+            end)
+            SpeedSliders[themeName] = slider
+        end
 
         self.Library.Options.ThemeManager_AnimatedThemeList:OnChanged(function()
             local selected = self.Library.Options.ThemeManager_AnimatedThemeList.Value
-            RainbowSpeedSlider:SetVisible(selected ~= nil and selected ~= '')
+
+            for _, themeName in ipairs(AnimatedThemes) do
+                if SpeedSliders[themeName] then
+                    SpeedSliders[themeName]:SetVisible(selected == themeName)
+                end
+            end
 
             if self.Library.Toggles.ThemeManager_AutoSetTheme.Value then
                 if selected and selected ~= '' then
-                    -- clear other lists
                     self.Library.Options.ThemeManager_ThemeList:SetValue(nil)
                     self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
                     self:ApplyTheme(selected)
@@ -594,6 +666,17 @@ local ThemeManager = {} do
 
             self:SaveCustomTheme(name)
             self.Library:Notify(string.format("Created theme %q", name))
+            self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
+            self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
+        end)
+
+        groupbox:AddButton('Export theme', function()
+            local name = self.Library.Options.ThemeManager_CustomThemeName.Value
+            if name:gsub(" ", "") == "" then
+                self.Library:Notify("Enter a name in the theme name field first", 2)
+                return
+            end
+            self:ExportTheme(name)
             self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
         end)
@@ -660,6 +743,37 @@ local ThemeManager = {} do
             self.Library:Notify('Cleared default theme')
             self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
+        end)
+
+        groupbox:AddDivider()
+
+        groupbox:AddInput('ThemeManager_VideoURL', { Text = 'Video background (asset ID or rbxassetid://)' })
+        groupbox:AddButton('Set video background', function()
+            local url = self.Library.Options.ThemeManager_VideoURL.Value
+            if not url or url:gsub(' ', '') == '' then
+                self.Library:Notify('Enter an asset ID or rbxassetid:// URL', 2)
+                return
+            end
+            if not url:match('^rbxassetid://') then
+                url = 'rbxassetid://' .. url
+            end
+            if self.Library.InnerVideoBackground then
+                self.Library.InnerVideoBackground.Video = url
+                self.Library.InnerVideoBackground.Playing = true
+                self.Library.InnerVideoBackground.Visible = true
+                self.Library:Notify('Video background set', 2)
+            end
+        end)
+        groupbox:AddButton('Clear video background', function()
+            if self.Library.InnerVideoBackground then
+                self.Library.InnerVideoBackground.Playing = false
+                self.Library.InnerVideoBackground.Visible = false
+                self.Library.InnerVideoBackground.Video = ''
+            end
+            if self.Library.Options.ThemeManager_VideoURL then
+                self.Library.Options.ThemeManager_VideoURL:SetValue('')
+            end
+            self.Library:Notify('Video background cleared', 2)
         end)
 
         self:LoadDefault()
