@@ -1106,8 +1106,12 @@ function Library:AddToRegistry(Instance, Properties, IsHud)
         table.insert(Library.HudRegistry, Data)
     end
 
+    local _visOk, _visVal = pcall(function() return Instance.Visible end)
+    local _hasVisible = _visOk and typeof(_visVal) == "boolean"
+
     local function _syncActive()
-        local isActive = pcall(function() return Instance.Visible end) and Instance.Visible
+        local ok, vis = pcall(function() return Instance.Visible end)
+        local isActive = ok and vis
         local found = false
         for i, d in ipairs(Library.ActiveRegistry) do
             if d == Data then
@@ -1121,20 +1125,23 @@ function Library:AddToRegistry(Instance, Properties, IsHud)
         end
     end
 
-    _syncActive()
-
-    Instance:GetPropertyChangedSignal("Visible"):Connect(function()
+    if _hasVisible then
         _syncActive()
-        if Instance.Visible then
-            for Property, ColorIdx in next, Data.Properties do
-                if typeof(ColorIdx) == "string" then
-                    pcall(function() Instance[Property] = Library[ColorIdx] end)
-                elseif typeof(ColorIdx) == "function" then
-                    pcall(function() Instance[Property] = ColorIdx() end)
+        Instance:GetPropertyChangedSignal("Visible"):Connect(function()
+            _syncActive()
+            if Instance.Visible then
+                for Property, ColorIdx in next, Data.Properties do
+                    if typeof(ColorIdx) == "string" then
+                        pcall(function() Instance[Property] = Library[ColorIdx] end)
+                    elseif typeof(ColorIdx) == "function" then
+                        pcall(function() Instance[Property] = ColorIdx() end)
+                    end
                 end
             end
-        end
-    end)
+        end)
+    else
+        table.insert(Library.ActiveRegistry, Data)
+    end
 end
 
 function Library:RemoveFromRegistry(Instance)
