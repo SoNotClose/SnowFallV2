@@ -292,9 +292,6 @@ local Library = {
     IgnoreLimit = 6;
     TabSize = 5;
 
-    BackgroundEffect = false;
-    EffectType = "";
-
     -- notification --
     Notify = nil;
     NotifySide = "Left";
@@ -7971,6 +7968,16 @@ end
 
             Tab.Groupboxes[Info.Name] = Groupbox
 
+            if Tab.SubTabs and Tab.HasDirectElements == false then
+                Tab.HasDirectElements = true
+                Tab:Resize()
+                if not Tab.ActiveSubTabName then
+                    LeftSide.Visible = true
+                    RightSide.Visible = true
+                    if Tab._SubTabContent then Tab._SubTabContent.Visible = false end
+                end
+            end
+
             return Groupbox
         end
 
@@ -8677,116 +8684,6 @@ end
     local Toggled = false
     local Fading = false
 
-    local _BgGui = nil
-    local _BgOverlay = nil
-    local _BgRunning = false
-
-    local function _StopBgEffect()
-        _BgRunning = false
-        if _BgGui then
-            _BgGui:Destroy()
-            _BgGui = nil
-            _BgOverlay = nil
-        end
-    end
-
-    local function _FadeBgOverlay(show, fadeTime)
-        if not _BgOverlay then return end
-        TweenService:Create(_BgOverlay, TweenInfo.new(fadeTime, Enum.EasingStyle.Linear), {
-            BackgroundTransparency = show and 0.45 or 1
-        }):Play()
-    end
-
-    local function _StartBgEffect()
-        _StopBgEffect()
-        if not Library.BackgroundEffect then return end
-
-        _BgGui = Instance.new("ScreenGui")
-        _BgGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-        _BgGui.DisplayOrder = 998
-        _BgGui.ResetOnSpawn = false
-        ParentUI(_BgGui)
-
-        _BgOverlay = Instance.new("Frame")
-        _BgOverlay.BackgroundColor3 = Color3.new(0, 0, 0)
-        _BgOverlay.BackgroundTransparency = 1
-        _BgOverlay.BorderSizePixel = 0
-        _BgOverlay.Size = UDim2.new(1, 0, 1, 0)
-        _BgOverlay.ZIndex = 1
-        _BgOverlay.Parent = _BgGui
-
-        _BgRunning = true
-
-        if Library.EffectType == "Snowy" then
-            task.spawn(function()
-                local count = 55
-                local particles = {}
-                for i = 1, count do
-                    local sz = math.random(3, 6)
-                    local p = Instance.new("Frame")
-                    p.Size = UDim2.fromOffset(sz, sz)
-                    p.BackgroundColor3 = Color3.new(1, 1, 1)
-                    p.BackgroundTransparency = math.random(0, 3) * 0.15
-                    p.BorderSizePixel = 0
-                    p.ZIndex = 2
-                    local corner = Instance.new("UICorner")
-                    corner.CornerRadius = UDim.new(1, 0)
-                    corner.Parent = p
-                    p.Parent = _BgOverlay
-                    p.Position = UDim2.new(math.random(0, 100) / 100, 0, math.random(-5, 95) / 100, 0)
-                    particles[i] = p
-                end
-                for _, p in ipairs(particles) do
-                    task.spawn(function()
-                        while _BgRunning and p.Parent do
-                            local startX = math.random(0, 100) / 100
-                            local driftX = math.random(-8, 8) / 100
-                            local dur = math.random(7, 14)
-                            p.Position = UDim2.new(startX, 0, -0.05, 0)
-                            local tween = TweenService:Create(p, TweenInfo.new(dur, Enum.EasingStyle.Linear), {
-                                Position = UDim2.new(startX + driftX, 0, 1.05, 0)
-                            })
-                            tween:Play()
-                            tween.Completed:Wait()
-                        end
-                    end)
-                end
-            end)
-        elseif Library.EffectType == "Rainy" then
-            task.spawn(function()
-                local count = 75
-                local particles = {}
-                for i = 1, count do
-                    local p = Instance.new("Frame")
-                    p.Size = UDim2.fromOffset(1, math.random(12, 25))
-                    p.BackgroundColor3 = Color3.fromRGB(180, 210, 255)
-                    p.BackgroundTransparency = 0.3 + math.random(0, 5) * 0.1
-                    p.BorderSizePixel = 0
-                    p.ZIndex = 2
-                    p.Parent = _BgOverlay
-                    p.Position = UDim2.new(math.random(0, 100) / 100, 0, math.random(-5, 95) / 100, 0)
-                    particles[i] = p
-                end
-                for _, p in ipairs(particles) do
-                    task.spawn(function()
-                        while _BgRunning and p.Parent do
-                            local startX = math.random(0, 100) / 100
-                            local dur = math.random(6, 16) / 10
-                            p.Position = UDim2.new(startX, 0, -0.03, 0)
-                            local tween = TweenService:Create(p, TweenInfo.new(dur, Enum.EasingStyle.Linear), {
-                                Position = UDim2.new(startX + 0.01, 0, 1.03, 0)
-                            })
-                            tween:Play()
-                            tween.Completed:Wait()
-                        end
-                    end)
-                end
-            end)
-        end
-    end
-
-    Library:OnUnload(function() _StopBgEffect() end)
-
     function Library:Toggle(Toggling)
         if typeof(Toggling) == "boolean" and Toggling == Toggled then return end
         if Fading then return end
@@ -8801,11 +8698,7 @@ end
         end
 
         if Toggled then
-            -- A bit scuffed, but if we're going from not toggled -> toggled we want to show the frame immediately so that the fade is visible.
             Outer.Visible = true
-            if Library.BackgroundEffect then
-                _StartBgEffect()
-            end
 
             if DrawingLib.drawing_replaced ~= true and IsBadDrawingLib ~= true then
                 IsBadDrawingLib = not (pcall(function()
@@ -8893,8 +8786,6 @@ end
             end)
         end
 
-        _FadeBgOverlay(Toggled, FadeTime)
-
         for _, Desc in next, Outer:GetDescendants() do
             local Properties = {}
 
@@ -8934,9 +8825,6 @@ end
 
         task.wait(FadeTime)
         Outer.Visible = Toggled
-        if not Toggled then
-            _StopBgEffect()
-        end
         Fading = false
     end
 
