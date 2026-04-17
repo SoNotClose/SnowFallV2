@@ -209,7 +209,7 @@ local ThemeManager = {} do
         if not httprequest then return {} end
 
         local success, result = pcall(httprequest, {
-            Url    = "https://api.github.com/repos/silence-lol/Enhanced-LinoriaLib/contents/extras/themes",
+            Url    = "https://api.github.com/repos/SoNotClose/SnowFallV2/contents/web/themes",
             Method = "GET",
         })
 
