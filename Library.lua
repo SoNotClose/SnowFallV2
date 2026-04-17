@@ -1106,12 +1106,17 @@ function Library:AddToRegistry(Instance, Properties, IsHud)
         table.insert(Library.HudRegistry, Data)
     end
 
-    local _visOk, _visVal = pcall(function() return Instance.Visible end)
-    local _hasVisible = _visOk and typeof(_visVal) == "boolean"
-
     local function _syncActive()
         local ok, vis = pcall(function() return Instance.Visible end)
-        local isActive = ok and vis
+        if not ok then
+            local found = false
+            for _, d in ipairs(Library.ActiveRegistry) do
+                if d == Data then found = true; break end
+            end
+            if not found then table.insert(Library.ActiveRegistry, Data) end
+            return
+        end
+        local isActive = vis == true
         local found = false
         for i, d in ipairs(Library.ActiveRegistry) do
             if d == Data then
@@ -1125,11 +1130,13 @@ function Library:AddToRegistry(Instance, Properties, IsHud)
         end
     end
 
-    if _hasVisible then
-        _syncActive()
+    _syncActive()
+
+    pcall(function()
         Instance:GetPropertyChangedSignal("Visible"):Connect(function()
             _syncActive()
-            if Instance.Visible then
+            local ok, vis = pcall(function() return Instance.Visible end)
+            if ok and vis then
                 for Property, ColorIdx in next, Data.Properties do
                     if typeof(ColorIdx) == "string" then
                         pcall(function() Instance[Property] = Library[ColorIdx] end)
@@ -1139,9 +1146,7 @@ function Library:AddToRegistry(Instance, Properties, IsHud)
                 end
             end
         end)
-    else
-        table.insert(Library.ActiveRegistry, Data)
-    end
+    end)
 end
 
 function Library:RemoveFromRegistry(Instance)
