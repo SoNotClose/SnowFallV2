@@ -232,7 +232,7 @@ local ThemeManager = {} do
     local function DownloadWebTheme(name)
         if not httprequest or not writefile then return false, "missing functions" end
 
-        local url     = "https://raw.githubusercontent.com/silence-lol/Enhanced-LinoriaLib/main/extras/themes/" .. name .. ".json"
+        local url     = "https://raw.githubusercontent.com/SoNotClose/SnowFallV2/main/web/themes/" .. name .. ".json"
         local success, result = pcall(httprequest, { Url = url, Method = "GET" })
 
         if not success or typeof(result) ~= "table" or typeof(result.Body) ~= "string" then
