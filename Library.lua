@@ -227,6 +227,7 @@ end
 local DPIScale = 1;
 local Library = {
     Registry = {};
+    ActiveRegistry = {};
     RegistryMap = {};
     HudRegistry = {};
 
@@ -1104,6 +1105,36 @@ function Library:AddToRegistry(Instance, Properties, IsHud)
     if IsHud then
         table.insert(Library.HudRegistry, Data)
     end
+
+    local function _syncActive()
+        local isActive = pcall(function() return Instance.Visible end) and Instance.Visible
+        local found = false
+        for i, d in ipairs(Library.ActiveRegistry) do
+            if d == Data then
+                if not isActive then table.remove(Library.ActiveRegistry, i) end
+                found = true
+                break
+            end
+        end
+        if isActive and not found then
+            table.insert(Library.ActiveRegistry, Data)
+        end
+    end
+
+    _syncActive()
+
+    Instance:GetPropertyChangedSignal("Visible"):Connect(function()
+        _syncActive()
+        if Instance.Visible then
+            for Property, ColorIdx in next, Data.Properties do
+                if typeof(ColorIdx) == "string" then
+                    pcall(function() Instance[Property] = Library[ColorIdx] end)
+                elseif typeof(ColorIdx) == "function" then
+                    pcall(function() Instance[Property] = ColorIdx() end)
+                end
+            end
+        end
+    end)
 end
 
 function Library:RemoveFromRegistry(Instance)
@@ -1111,33 +1142,20 @@ function Library:RemoveFromRegistry(Instance)
 
     if Data then
         for Idx = #Library.Registry, 1, -1 do
-            if Library.Registry[Idx] == Data then
-                table.remove(Library.Registry, Idx)
-            end
+            if Library.Registry[Idx] == Data then table.remove(Library.Registry, Idx) end
         end
-
+        for Idx = #Library.ActiveRegistry, 1, -1 do
+            if Library.ActiveRegistry[Idx] == Data then table.remove(Library.ActiveRegistry, Idx) end
+        end
         for Idx = #Library.HudRegistry, 1, -1 do
-            if Library.HudRegistry[Idx] == Data then
-                table.remove(Library.HudRegistry, Idx)
-            end
+            if Library.HudRegistry[Idx] == Data then table.remove(Library.HudRegistry, Idx) end
         end
-
         Library.RegistryMap[Instance] = nil
     end
 end
 
 function Library:UpdateColorsUsingRegistry()
-    -- TODO: Could have an "active" list of objects
-    -- where the active list only contains Visible objects.
-
-    -- IMPL: Could setup .Changed events on the AddToRegistry function
-    -- that listens for the "Visible" propert being changed.
-    -- Visible: true => Add to active list, and call UpdateColors function
-    -- Visible: false => Remove from active list.
-
-    -- The above would be especially efficient for a rainbow menu color or live color-changing.
-
-    for Idx, Object in next, Library.Registry do
+    for _, Object in next, Library.ActiveRegistry do
         for Property, ColorIdx in next, Object.Properties do
             if typeof(ColorIdx) == "string" then
                 Object.Instance[Property] = Library[ColorIdx]
@@ -6416,9 +6434,9 @@ do
     })
 
     Library.MiddleNotificationArea = Library:Create("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0);
+        AnchorPoint = Vector2.new(0.5, 1);
         BackgroundTransparency = 1;
-        Position = UDim2.new(0.5, 0, 0, 40);
+        Position = UDim2.new(0.5, 0, 1, -40);
         Size = UDim2.new(0, 300, 1, -80);
         ZIndex = 11000;
         Parent = ScreenGui;
@@ -6427,6 +6445,7 @@ do
     Library:Create("UIListLayout", {
         Padding = UDim.new(0, 4);
         FillDirection = Enum.FillDirection.Vertical;
+        VerticalAlignment = Enum.VerticalAlignment.Bottom;
         HorizontalAlignment = Enum.HorizontalAlignment.Center;
         SortOrder = Enum.SortOrder.LayoutOrder;
         Parent = Library.MiddleNotificationArea;
@@ -6462,7 +6481,7 @@ do
         if typeof(Data.Time) == "Instance" then
             DeleteConnection = Data.Time.Destroying:Connect(function()
                 DeletedInstance = true
-                DeleteConnection:Disconnect()
+                pcall(function() DeleteConnection:Disconnect() end)
                 DeleteConnection = nil
             end)
         end
@@ -6532,9 +6551,9 @@ do
         })
 
         local ExtraWidth = 0
-        local TextPosition = Side == "left" and UDim2.new(0, 4, 0, 0) or UDim2.new(1, -4, 0, 0)
+        local TextPosition = Side == "left" and UDim2.new(0, 4, 0, -2) or UDim2.new(1, -4, 0, -2)
         local TextSizeOffsetX = -4
-        local TextSizeOffsetY = 0
+        local TextSizeOffsetY = -4
 
         local IconLabel
         if Data.Icon then
@@ -7507,7 +7526,6 @@ function Library:CreateWindow(...)
             Parent = TabButton;
         })
 
-        -- AccentColor strip at top of the selected tab button for clear visual distinction
         local TabHighlight = Library:Create("Frame", {
             BackgroundColor3 = Library.AccentColor;
             BorderSizePixel = 0;
@@ -7800,7 +7818,6 @@ end
 
             Tab:Resize()
 
-            -- Restore correct sub-view when returning to this tab
             if Tab.HasDirectElements and Tab.SubTabs then
                 if Tab.ActiveSubTabName then
                     LeftSide.Visible = false
@@ -8158,13 +8175,11 @@ end
             return Tab:AddTabbox({ Name = Name, Side = 2; })
         end
 
-        -- Sub-tab support: Tab:AddTab("Name") nests a tab row inside this tab
         function Tab:AddTab(SubName)
             if not Tab.SubTabs then
                 Tab.SubTabs = {}
                 Tab.ActiveSubTabName = nil
 
-                -- Check whether this tab already has direct elements in LeftSide/RightSide
                 local function _hasDirect(side)
                     for _, c in ipairs(side:GetChildren()) do
                         if not c:IsA("UIListLayout") then return true end
@@ -8173,18 +8188,18 @@ end
                 end
                 Tab.HasDirectElements = _hasDirect(LeftSide) or _hasDirect(RightSide)
 
-                -- Transparent, borderless button row — avoids double border
                 local SubTabScrollArea = Library:Create("ScrollingFrame", {
                     ScrollingDirection = Enum.ScrollingDirection.X;
                     AutomaticCanvasSize = Enum.AutomaticSize.XY;
                     ScrollBarThickness = 0;
-                    BackgroundTransparency = 1;
+                    BackgroundColor3 = Library.BackgroundColor;
                     BorderSizePixel = 0;
                     Position = UDim2.new(0, 7, 0, 7);
                     Size = UDim2.new(1, -14, 0, 22);
                     ZIndex = 2;
                     Parent = TabFrame;
                 })
+                Library:AddToRegistry(SubTabScrollArea, { BackgroundColor3 = "BackgroundColor" })
                 Library:Create("UIListLayout", {
                     Padding = UDim.new(0, 1);
                     FillDirection = Enum.FillDirection.Horizontal;
@@ -8193,7 +8208,6 @@ end
                     Parent = SubTabScrollArea;
                 })
 
-                -- Single bordered content area, ZIndex=2 mirrors standard TabContainer
                 local SubTabContent = Library:Create("Frame", {
                     BackgroundColor3 = Library.MainColor;
                     BorderColor3 = Library.OutlineColor;
@@ -8213,7 +8227,6 @@ end
                 Tab._SubTabContent = SubTabContent
 
                 if Tab.HasDirectElements then
-                    -- Keep LeftSide/RightSide visible; Tab:Resize will shift them below the nav bar
                     Tab:Resize()
                 else
                     LeftSide.Visible = false
@@ -8228,7 +8241,12 @@ end
                 TableType = "Tab";
             }
 
-            local subBtnW = Library:GetTextBounds(SubName, Library.Font, 14) + 22
+            local _subBtnTextW = Library:GetTextBounds(SubName, Library.Font, 14)
+            local subBtnW = (Library.IgnoreTabSizes and #SubName < Library.IgnoreLimit)
+                and math.max(_subBtnTextW, Library.TabSize * 16)
+                or _subBtnTextW
+            subBtnW = subBtnW + 22
+
             local SubBtn = Library:Create("Frame", {
                 BackgroundColor3 = Library.BackgroundColor;
                 BorderColor3 = Library.OutlineColor;
@@ -8240,26 +8258,37 @@ end
                 BackgroundColor3 = "BackgroundColor";
                 BorderColor3 = "OutlineColor";
             })
+
+            local SubBtnInner = Library:Create("Frame", {
+                BackgroundColor3 = Library.BackgroundColor;
+                BorderColor3 = Color3.new(0, 0, 0);
+                Position = UDim2.new(0, 1, 0, 1);
+                Size = UDim2.new(1, -2, 1, -2);
+                ZIndex = 5;
+                Parent = SubBtn;
+            })
+            Library:AddToRegistry(SubBtnInner, { BackgroundColor3 = "BackgroundColor" })
+
             Library:CreateLabel({
-                Position = UDim2.new(0, 6, 0, 0);
-                Size = UDim2.new(1, -12, 1, 0);
+                Position = UDim2.new(0, 5, 0, 0);
+                Size = UDim2.new(1, -10, 1, 0);
                 TextSize = 14;
                 Text = SubName;
                 SkipLowercase = true;
-                ZIndex = 4;
-                Parent = SubBtn;
+                ZIndex = 6;
+                Parent = SubBtnInner;
             })
-            -- AccentColor strip for selected subtab button
+
             local SubBtnHighlight = Library:Create("Frame", {
                 BackgroundColor3 = Library.AccentColor;
                 BorderSizePixel = 0;
                 Size = UDim2.new(1, 0, 0, 2);
-                ZIndex = 5;
+                ZIndex = 6;
                 Visible = false;
-                Parent = SubBtn;
+                Parent = SubBtnInner;
             })
             Library:AddToRegistry(SubBtnHighlight, { BackgroundColor3 = "AccentColor" })
-            -- Hides the top border of SubTabContent under the active button
+
             local SubBtnBlocker = Library:Create("Frame", {
                 BackgroundColor3 = Library.MainColor;
                 BorderSizePixel = 0;
@@ -8280,7 +8309,6 @@ end
                 Parent = Tab._SubTabContent;
             })
 
-            -- ZIndex=2 matches LeftSide/RightSide in standard Tab — groupboxes use BoxOuter=2, BoxInner=4
             local SubLeft = Library:Create("ScrollingFrame", {
                 BackgroundTransparency = 1;
                 BorderSizePixel = 0;
@@ -8322,8 +8350,8 @@ end
             local function _deactivateAllSubBtns()
                 for _, st in next, Tab.SubTabs do
                     st._frame.Visible = false
-                    st._btn.BackgroundColor3 = Library.BackgroundColor
-                    Library.RegistryMap[st._btn].Properties.BackgroundColor3 = "BackgroundColor"
+                    st._inner.BackgroundColor3 = Library.BackgroundColor
+                    Library.RegistryMap[st._inner].Properties.BackgroundColor3 = "BackgroundColor"
                     st._blocker.BackgroundTransparency = 1
                     st._highlight.Visible = false
                 end
@@ -8334,8 +8362,8 @@ end
                 _deactivateAllSubBtns()
                 SubBtnBlocker.BackgroundTransparency = 0
                 SubBtnHighlight.Visible = true
-                SubBtn.BackgroundColor3 = Library.MainColor
-                Library.RegistryMap[SubBtn].Properties.BackgroundColor3 = "MainColor"
+                SubBtnInner.BackgroundColor3 = Library.MainColor
+                Library.RegistryMap[SubBtnInner].Properties.BackgroundColor3 = "MainColor"
                 SubTabFrame.Visible = true
                 Tab._SubTabContent.Visible = true
                 if Tab.HasDirectElements then
@@ -8346,8 +8374,8 @@ end
             function SubTab:HideTab()
                 SubBtnBlocker.BackgroundTransparency = 1
                 SubBtnHighlight.Visible = false
-                SubBtn.BackgroundColor3 = Library.BackgroundColor
-                Library.RegistryMap[SubBtn].Properties.BackgroundColor3 = "BackgroundColor"
+                SubBtnInner.BackgroundColor3 = Library.BackgroundColor
+                Library.RegistryMap[SubBtnInner].Properties.BackgroundColor3 = "BackgroundColor"
                 SubTabFrame.Visible = false
                 Tab.ActiveSubTabName = nil
                 if Tab.HasDirectElements then
@@ -8359,13 +8387,12 @@ end
             SubTab.Show = SubTab.ShowTab
             SubTab.Hide = SubTab.HideTab
 
-            -- Store refs for cross-subtab deactivation
             SubTab._frame = SubTabFrame
             SubTab._btn = SubBtn
+            SubTab._inner = SubBtnInner
             SubTab._blocker = SubBtnBlocker
             SubTab._highlight = SubBtnHighlight
 
-            -- Identical structure to Tab:AddGroupbox — same ZIndex chain (BoxOuter=2, BoxInner=4)
             function SubTab:AddGroupbox(Info)
                 local Groupbox = {
                     Elements = {};
@@ -8446,7 +8473,6 @@ end
                 return SubTab:AddGroupbox({ Side = 2; Name = Name; })
             end
 
-            -- Identical structure to Tab:AddTabbox — same ZIndex chain
             function SubTab:AddTabbox(Info)
                 local Tabbox = {
                     Tabs = {};
@@ -8639,7 +8665,6 @@ end
     local Toggled = false
     local Fading = false
 
-    -- ─── Background Effect ────────────────────────────────────────────────────
     local _BgGui = nil
     local _BgOverlay = nil
     local _BgRunning = false
@@ -8662,7 +8687,7 @@ end
 
     local function _StartBgEffect()
         _StopBgEffect()
-        if not Library.BackgroundEffect or Library.EffectType == "" then return end
+        if not Library.BackgroundEffect then return end
 
         _BgGui = Instance.new("ScreenGui")
         _BgGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
@@ -8746,11 +8771,9 @@ end
                 end
             end)
         end
-        -- Noir: overlay only, particles not needed
     end
 
     Library:OnUnload(function() _StopBgEffect() end)
-    -- ─────────────────────────────────────────────────────────────────────────
 
     function Library:Toggle(Toggling)
         if typeof(Toggling) == "boolean" and Toggling == Toggled then return end
@@ -8768,7 +8791,7 @@ end
         if Toggled then
             -- A bit scuffed, but if we're going from not toggled -> toggled we want to show the frame immediately so that the fade is visible.
             Outer.Visible = true
-            if Library.BackgroundEffect and Library.EffectType ~= "" then
+            if Library.BackgroundEffect then
                 _StartBgEffect()
             end
 
