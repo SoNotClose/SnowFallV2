@@ -292,7 +292,25 @@ local Library = {
     IgnoreLimit = 6;
     TabSize = 5;
 
-    -- notification --
+    ControllerNavType = "Dpad";
+    ControllerNavSensitivity = 5;
+
+    LimitNotifications = false;
+    MaximumNotifications = 5;
+
+    NotificationPositionX    = 50;
+    NotificationPositionY    = 50;
+    NotificationAlignment    = "Center";
+    NotificationBarSide      = "Left";
+    NotificationAnimatedBar  = true;
+    NotificationForceColor   = false;
+    NotificationAccentColor  = Color3.fromRGB(120, 120, 200);
+    NotificationOutlineColor = Color3.fromRGB(60, 60, 80);
+    NotificationFontColor    = Color3.fromRGB(255, 255, 255);
+
+    CustomCursor = false;
+    CursorType   = "Mouse";
+
     Notify = nil;
     NotifySide = "Left";
     ShowCustomCursor = true;
@@ -2065,6 +2083,16 @@ do
 
         assert(Info.Default, string.format("AddColorPicker (IDX: %s): Missing default value.", tostring(Idx)))
 
+        local GradientDefault = nil
+        if Info.AllowGradient then
+            if typeof(Info.Default) == "ColorSequence" then
+                GradientDefault = Info.Default
+                Info.Default = Info.Default.Keypoints[1].Value
+            else
+                GradientDefault = ColorSequence.new(Info.Default, Info.Default)
+            end
+        end
+
         local ColorPicker = {
             Value = Info.Default;
 
@@ -2081,7 +2109,49 @@ do
             Transparency = nil
         }
 
+        local GradientStops = {}
+        local SelectedStop = nil
+        local GradientDisplayGradient = nil
+        local GradientStripGradient = nil
+
+        local function BuildColorSequence()
+            if #GradientStops < 2 then
+                local c = GradientStops[1] and GradientStops[1].Color or Color3.new(1, 1, 1)
+                return ColorSequence.new(c, c)
+            end
+            table.sort(GradientStops, function(a, b) return a.Time < b.Time end)
+            local kps = {}
+            for i, stop in ipairs(GradientStops) do
+                local t = stop.Time
+                if i == 1 then t = 0 end
+                if i == #GradientStops then t = 1 end
+                table.insert(kps, ColorSequenceKeypoint.new(math.clamp(t, 0, 1), stop.Color))
+            end
+            return ColorSequence.new(kps)
+        end
+
+        local function RefreshGradientVisuals()
+            local cs = BuildColorSequence()
+            if GradientDisplayGradient then GradientDisplayGradient.Color = cs end
+            if GradientStripGradient then GradientStripGradient.Color = cs end
+            for _, stop in ipairs(GradientStops) do
+                if stop.Frame then
+                    stop.Frame.Position = UDim2.new(math.clamp(stop.Time, 0, 1), 0, 0.5, 0)
+                    stop.Frame.BackgroundColor3 = stop.Color
+                    stop.Frame.BorderColor3 = (stop == SelectedStop) and Library.AccentColor or Color3.new(0, 0, 0)
+                end
+            end
+        end
+
         local function RunCallback()
+            if Info.AllowGradient then
+                local cs = BuildColorSequence()
+                ColorPicker.Value = cs
+                Library:SafeCallback(ColorPicker.Callback, cs)
+                Library:SafeCallback(ColorPicker.Changed, cs)
+                return
+            end
+
             local NewValue = ColorPicker.Value
             local NewTransparency = ColorPicker.Transparency
 
@@ -2704,6 +2774,162 @@ do
                 end
             end
         end))
+
+        if Info.AllowGradient then
+            PickerFrameOuter.Size = UDim2.fromOffset(230, (Info.Transparency and 271 or 253) + 28)
+
+            GradientDisplayGradient = Library:Create("UIGradient", {
+                Parent = DisplayFrame;
+            })
+            DisplayFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+
+            local GradientBarOuter = Library:Create("Frame", {
+                BorderColor3 = Color3.new(0, 0, 0);
+                Position = UDim2.fromOffset(4, Info.Transparency and 275 or 257);
+                Size = UDim2.new(1, -8, 0, 20);
+                ZIndex = 17;
+                Parent = PickerFrameInner;
+            })
+
+            local GradientBarInner = Library:Create("Frame", {
+                BackgroundColor3 = Color3.new(1, 1, 1);
+                BorderSizePixel = 0;
+                Size = UDim2.new(1, 0, 1, 0);
+                ZIndex = 18;
+                Parent = GradientBarOuter;
+            })
+
+            GradientStripGradient = Library:Create("UIGradient", {
+                Parent = GradientBarInner;
+            })
+
+            local function CreateStopFrame(stop)
+                if stop.Frame then stop.Frame:Destroy() end
+                stop.Frame = Library:Create("Frame", {
+                    AnchorPoint = Vector2.new(0.5, 0.5);
+                    BackgroundColor3 = stop.Color;
+                    BorderColor3 = (stop == SelectedStop) and Library.AccentColor or Color3.new(0, 0, 0);
+                    Position = UDim2.new(math.clamp(stop.Time, 0, 1), 0, 0.5, 0);
+                    Size = UDim2.new(0, 8, 0, 14);
+                    ZIndex = 21;
+                    Parent = GradientBarInner;
+                })
+            end
+
+            local function InitStopsFromColorSequence(cs)
+                for _, stop in ipairs(GradientStops) do
+                    if stop.Frame then stop.Frame:Destroy() end
+                end
+                GradientStops = {}
+                for _, kp in ipairs(cs.Keypoints) do
+                    local stop = { Time = kp.Time, Color = kp.Value }
+                    table.insert(GradientStops, stop)
+                    CreateStopFrame(stop)
+                end
+                SelectedStop = GradientStops[1]
+            end
+
+            GradientBarInner.InputBegan:Connect(function(Input)
+                if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+                    local barPos = GradientBarInner.AbsolutePosition.X
+                    local barSize = GradientBarInner.AbsoluteSize.X
+                    local clickTime = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
+
+                    local nearestStop = nil
+                    local nearestPixelDist = math.huge
+                    for _, stop in ipairs(GradientStops) do
+                        local dist = math.abs(stop.Time - clickTime) * barSize
+                        if dist < nearestPixelDist then
+                            nearestPixelDist = dist
+                            nearestStop = stop
+                        end
+                    end
+
+                    if nearestStop and nearestPixelDist <= 6 then
+                        SelectedStop = nearestStop
+                        ColorPicker:SetHSVFromRGB(SelectedStop.Color)
+                        ColorPicker:Display()
+                        RefreshGradientVisuals()
+
+                        while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                            SelectedStop.Time = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
+                            RefreshGradientVisuals()
+                            RunService.RenderStepped:Wait()
+                        end
+                        RunCallback()
+                        Library:AttemptSave()
+                    else
+                        local stop = { Time = clickTime, Color = SelectedStop and SelectedStop.Color or Color3.new(1, 1, 1) }
+                        table.insert(GradientStops, stop)
+                        CreateStopFrame(stop)
+                        SelectedStop = stop
+                        RefreshGradientVisuals()
+                        RunCallback()
+                        Library:AttemptSave()
+                    end
+                elseif Input.UserInputType == Enum.UserInputType.MouseButton2 and #GradientStops > 2 then
+                    local barPos = GradientBarInner.AbsolutePosition.X
+                    local barSize = GradientBarInner.AbsoluteSize.X
+                    local clickTime = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
+
+                    local nearestStop = nil
+                    local nearestPixelDist = math.huge
+                    for _, stop in ipairs(GradientStops) do
+                        local dist = math.abs(stop.Time - clickTime) * barSize
+                        if dist < nearestPixelDist then
+                            nearestPixelDist = dist
+                            nearestStop = stop
+                        end
+                    end
+
+                    if nearestStop and nearestPixelDist <= 6 then
+                        local idx = table.find(GradientStops, nearestStop)
+                        nearestStop.Frame:Destroy()
+                        table.remove(GradientStops, idx)
+                        if SelectedStop == nearestStop then
+                            SelectedStop = GradientStops[math.min(idx, #GradientStops)]
+                        end
+                        ColorPicker:SetHSVFromRGB(SelectedStop.Color)
+                        ColorPicker:Display()
+                        RefreshGradientVisuals()
+                        RunCallback()
+                    end
+                end
+            end)
+
+            InitStopsFromColorSequence(GradientDefault)
+            RefreshGradientVisuals()
+
+            local OriginalDisplay = ColorPicker.Display
+            function ColorPicker:Display()
+                OriginalDisplay(self)
+                DisplayFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+                DisplayFrame.BackgroundTransparency = 0
+                if SelectedStop then
+                    SelectedStop.Color = ColorPicker.Value
+                end
+                RefreshGradientVisuals()
+            end
+
+            local OriginalSetValue = ColorPicker.SetValue
+            function ColorPicker:SetValue(Val, Transparency)
+                if typeof(Val) == "ColorSequence" then
+                    InitStopsFromColorSequence(Val)
+                    RefreshGradientVisuals()
+                    if SelectedStop then
+                        ColorPicker:SetHSVFromRGB(SelectedStop.Color)
+                    end
+                    OriginalDisplay(self)
+                    DisplayFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+                    DisplayFrame.BackgroundTransparency = 0
+                    RunCallback()
+                    return
+                end
+                OriginalSetValue(self, Val, Transparency)
+            end
+
+            ColorPicker.Value = BuildColorSequence()
+        end
 
         ColorPicker:Display()
         ColorPicker.DisplayFrame = DisplayFrame
@@ -3849,9 +4075,16 @@ do
 
         function Button:SetVisible(Visibility)
             IsVisible = Visibility
+            Button.Visible = IsVisible
 
             Button.Outer.Visible = IsVisible
             if Blank then Blank.Visible = IsVisible end
+
+            if IsVisible then
+                pcall(function() Button.Outer.BackgroundTransparency = 0 end)
+                pcall(function() Button.Inner.BackgroundTransparency = 0 end)
+                pcall(function() Button.Label.TextTransparency = 0 end)
+            end
 
             Groupbox:Resize()
         end
@@ -4703,6 +4936,287 @@ do
                 Library:AttemptSave()
             end
         end)
+
+        function Slider:AddSlider(SubIdx, SubInfo)
+            assert(SubInfo.Default,  string.format("SubSlider (IDX: %s): Missing default value.", tostring(SubIdx)))
+            assert(SubInfo.Text,     string.format("SubSlider (IDX: %s): Missing slider text.", tostring(SubIdx)))
+            assert(SubInfo.Min,      string.format("SubSlider (IDX: %s): Missing minimum value.", tostring(SubIdx)))
+            assert(SubInfo.Max,      string.format("SubSlider (IDX: %s): Missing maximum value.", tostring(SubIdx)))
+            assert(SubInfo.Rounding, string.format("SubSlider (IDX: %s): Missing rounding value.", tostring(SubIdx)))
+
+            local _subCompact = Info.Compact or SubInfo.Compact == true
+
+            if _subCompact then
+                if SliderText then
+                    SliderText.Visible = false
+                    for _, Blank in pairs(Blanks) do
+                        Blank.Visible = false
+                    end
+                end
+                Info.Compact = true
+                Slider:Display()
+            else
+                if SliderText then
+                    SliderText.Size = UDim2.new(0.5, -2, 0, 10)
+                end
+            end
+
+            SliderOuter.Size = UDim2.new(0.5, -2, 0, 13)
+
+            local SubSlider = {
+                Value    = SubInfo.Default;
+                Min      = SubInfo.Min;
+                Max      = SubInfo.Max;
+                Rounding = SubInfo.Rounding;
+                MaxSize  = 232;
+                Type     = "Slider";
+                Visible  = if typeof(SubInfo.Visible) == "boolean" then SubInfo.Visible else true;
+                Disabled = if typeof(SubInfo.Disabled) == "boolean" then SubInfo.Disabled else false;
+                OriginalText = SubInfo.Text; Text = SubInfo.Text;
+                Prefix = typeof(SubInfo.Prefix) == "string" and SubInfo.Prefix or "";
+                Suffix = typeof(SubInfo.Suffix) == "string" and SubInfo.Suffix or "";
+                Callback = SubInfo.Callback or function() end;
+            }
+
+            local SubSliderOuter = Library:Create("Frame", {
+                BackgroundColor3 = Color3.new(0, 0, 0);
+                BorderColor3     = Color3.new(0, 0, 0);
+                Position         = UDim2.new(1, 3, 0, 0);
+                Size             = UDim2.new(1, -3, 1, 0);
+                ZIndex           = 5;
+                Parent           = SliderOuter;
+            })
+
+            local SubSliderTextLabel = nil
+            if not _subCompact then
+                SubSliderTextLabel = Library:CreateLabel({
+                    Size           = UDim2.new(1, 0, 0, 10);
+                    Position       = UDim2.new(0, 0, 0, -13);
+                    TextSize       = 14;
+                    Text           = SubInfo.Text;
+                    TextXAlignment = Enum.TextXAlignment.Left;
+                    TextYAlignment = Enum.TextYAlignment.Bottom;
+                    Visible        = SubSlider.Visible;
+                    ZIndex         = 5;
+                    Parent         = SubSliderOuter;
+                    RichText       = true;
+                })
+            end
+
+            SubSliderOuter:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                SubSlider.MaxSize = SubSliderOuter.AbsoluteSize.X - 2
+            end)
+
+            Library:AddToRegistry(SubSliderOuter, { BorderColor3 = "Black" })
+
+            local SubSliderInner = Library:Create("Frame", {
+                BackgroundColor3 = Library.MainColor;
+                BorderColor3     = Library.OutlineColor;
+                BorderMode       = Enum.BorderMode.Inset;
+                Size             = UDim2.new(1, 0, 1, 0);
+                ZIndex           = 6;
+                Parent           = SubSliderOuter;
+            })
+            Library:AddToRegistry(SubSliderInner, { BackgroundColor3 = "MainColor"; BorderColor3 = "OutlineColor" })
+
+            local SubFill = Library:Create("Frame", {
+                BackgroundColor3 = Library.AccentColor;
+                BorderColor3     = Library.AccentColorDark;
+                Size             = UDim2.new(0, 0, 1, 0);
+                ZIndex           = 7;
+                Parent           = SubSliderInner;
+            })
+            Library:AddToRegistry(SubFill, { BackgroundColor3 = "AccentColor"; BorderColor3 = "AccentColorDark" })
+
+            local SubHideBorderRight = Library:Create("Frame", {
+                BackgroundColor3 = Library.AccentColor;
+                BorderSizePixel  = 0;
+                Position         = UDim2.new(1, 0, 0, 0);
+                Size             = UDim2.new(0, 1, 1, 0);
+                ZIndex           = 8;
+                Parent           = SubFill;
+            })
+            Library:AddToRegistry(SubHideBorderRight, { BackgroundColor3 = "AccentColor" })
+
+            local SubDisplayLabel = Library:CreateLabel({
+                Size     = UDim2.new(1, 0, 1, 0);
+                TextSize = 14;
+                Text     = "Infinite";
+                ZIndex   = 9;
+                Parent   = SubSliderInner;
+                RichText = true;
+            })
+
+            Library:OnHighlight(SubSliderOuter, SubSliderOuter,
+                { BorderColor3 = "AccentColor" },
+                { BorderColor3 = "Black" },
+                function() return not SubSlider.Disabled end
+            )
+
+            if typeof(SubInfo.Tooltip) == "string" or typeof(SubInfo.DisabledTooltip) == "string" then
+                local SubTooltip = Library:AddToolTip(SubInfo.Tooltip, SubInfo.DisabledTooltip, SubSliderOuter)
+                SubTooltip.Disabled = SubSlider.Disabled
+                SubSlider._Tooltip = SubTooltip
+            end
+
+            function SubSlider:UpdateColors()
+                SubDisplayLabel.TextColor3 = SubSlider.Disabled and Library.DisabledAccentColor or Color3.new(1, 1, 1)
+                SubHideBorderRight.BackgroundColor3 = SubSlider.Disabled and Library.DisabledAccentColor or Library.AccentColor
+                SubFill.BackgroundColor3 = SubSlider.Disabled and Library.DisabledAccentColor or Library.AccentColor
+                SubFill.BorderColor3     = SubSlider.Disabled and Library.DisabledOutlineColor  or Library.AccentColorDark
+                Library.RegistryMap[SubHideBorderRight].Properties.BackgroundColor3 = SubSlider.Disabled and "DisabledAccentColor" or "AccentColor"
+                Library.RegistryMap[SubFill].Properties.BackgroundColor3 = SubSlider.Disabled and "DisabledAccentColor" or "AccentColor"
+                Library.RegistryMap[SubFill].Properties.BorderColor3     = SubSlider.Disabled and "DisabledOutlineColor"  or "AccentColorDark"
+            end
+
+            function SubSlider:Display()
+                local FormattedValue = (SubSlider.Value == 0 or SubSlider.Value == -0) and "0" or tostring(SubSlider.Value)
+                if SubInfo.FormatDisplayValue then
+                    local custom = SubInfo.FormatDisplayValue(SubSlider, SubSlider.Value)
+                    if custom then
+                        SubDisplayLabel.Text = tostring(custom)
+                        local X2 = Library:MapValue(SubSlider.Value, SubSlider.Min, SubSlider.Max, 0, 1)
+                        SubFill.Size = UDim2.new(X2, 0, 1, 0)
+                        SubHideBorderRight.Visible = not (X2 == 1 or X2 == 0)
+                        return
+                    end
+                end
+                if _subCompact then
+                    SubDisplayLabel.Text = string.format("%s: %s%s%s", SubSlider.Text, SubSlider.Prefix, FormattedValue, SubSlider.Suffix)
+                elseif SubInfo.HideMax then
+                    SubDisplayLabel.Text = string.format("%s%s%s", SubSlider.Prefix, FormattedValue, SubSlider.Suffix)
+                else
+                    SubDisplayLabel.Text = string.format("%s%s%s/%s%s%s",
+                        SubSlider.Prefix, FormattedValue, SubSlider.Suffix,
+                        SubSlider.Prefix, tostring(SubSlider.Max), SubSlider.Suffix)
+                end
+                local X = Library:MapValue(SubSlider.Value, SubSlider.Min, SubSlider.Max, 0, 1)
+                SubFill.Size = UDim2.new(X, 0, 1, 0)
+                SubHideBorderRight.Visible = not (X == 1 or X == 0)
+            end
+
+            function SubSlider:OnChanged(Func)
+                SubSlider.Changed = Func
+            end
+
+            local function SubRound(Value)
+                if SubSlider.Rounding == 0 then return math.floor(Value) end
+                return tonumber(string.format("%." .. SubSlider.Rounding .. "f", Value))
+            end
+
+            function SubSlider:GetValueFromXScale(X)
+                return SubRound(Library:MapValue(X, 0, 1, SubSlider.Min, SubSlider.Max))
+            end
+
+            function SubSlider:SetMax(Value)
+                assert(Value > SubSlider.Min, "Max value cannot be less than the current min value.")
+                SubSlider.Value = math.clamp(SubSlider.Value, SubSlider.Min, Value)
+                SubSlider.Max = Value
+                SubSlider:Display()
+            end
+
+            function SubSlider:SetMin(Value)
+                assert(Value < SubSlider.Max, "Min value cannot be greater than the current max value.")
+                SubSlider.Value = math.clamp(SubSlider.Value, Value, SubSlider.Max)
+                SubSlider.Min = Value
+                SubSlider:Display()
+            end
+
+            function SubSlider:SetValue(Str)
+                if SubSlider.Disabled then return end
+                local Num = tonumber(Str)
+                if not Num then return end
+                Num = math.clamp(Num, SubSlider.Min, SubSlider.Max)
+                SubSlider.Value = Num
+                SubSlider:Display()
+                if not SubSlider.Disabled then
+                    Library:SafeCallback(SubSlider.Callback, SubSlider.Value)
+                    Library:SafeCallback(SubSlider.Changed, SubSlider.Value)
+                end
+            end
+
+            function SubSlider:SetVisible(Visibility)
+                SubSlider.Visible = Visibility
+                SubSliderOuter.Visible = Visibility
+                if SubSliderTextLabel then SubSliderTextLabel.Visible = Visibility end
+                Groupbox:Resize()
+            end
+
+            function SubSlider:SetDisabled(Disabled)
+                SubSlider.Disabled = Disabled
+                if SubSlider._Tooltip then SubSlider._Tooltip.Disabled = Disabled end
+                SubSlider:UpdateColors()
+            end
+
+            function SubSlider:SetText(Text)
+                if typeof(Text) == "string" then
+                    SubSlider.Text = Text
+                    if SubSliderTextLabel then SubSliderTextLabel.Text = Text end
+                    SubSlider:Display()
+                end
+            end
+
+            function SubSlider:SetPrefix(Prefix)
+                if typeof(Prefix) == "string" then SubSlider.Prefix = Prefix; SubSlider:Display() end
+            end
+
+            function SubSlider:SetSuffix(Suffix)
+                if typeof(Suffix) == "string" then SubSlider.Suffix = Suffix; SubSlider:Display() end
+            end
+
+            SubSliderInner.InputBegan:Connect(function(Input)
+                if SubSlider.Disabled then return end
+                if (Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame()) or Input.UserInputType == Enum.UserInputType.Touch then
+                    if Library.IsMobile then Library.CanDrag = false end
+
+                    local Sides = {}
+                    if Library.Window then
+                        Sides = Library.Window.Tabs[Library.ActiveTab]:GetSides()
+                    end
+                    for _, Side in pairs(Sides) do
+                        if typeof(Side) == "Instance" and Side:IsA("ScrollingFrame") then
+                            Side.ScrollingEnabled = false
+                        end
+                    end
+
+                    local mPos = Mouse.X
+                    local gPos = SubFill.AbsoluteSize.X
+                    local Diff = mPos - (SubFill.AbsolutePosition.X + gPos)
+
+                    while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
+                        local nMPos    = Mouse.X
+                        local nXOffset = math.clamp(gPos + (nMPos - mPos) + Diff, 0, SubSlider.MaxSize)
+                        local nXScale  = Library:MapValue(nXOffset, 0, SubSlider.MaxSize, 0, 1)
+                        local nValue   = SubSlider:GetValueFromXScale(nXScale)
+                        local OldValue = SubSlider.Value
+                        SubSlider.Value = nValue
+                        SubSlider:Display()
+                        if nValue ~= OldValue then
+                            Library:SafeCallback(SubSlider.Callback, SubSlider.Value)
+                            Library:SafeCallback(SubSlider.Changed, SubSlider.Value)
+                        end
+                        RunService.RenderStepped:Wait()
+                    end
+
+                    if Library.IsMobile then Library.CanDrag = true end
+                    for _, Side in pairs(Sides) do
+                        if typeof(Side) == "Instance" and Side:IsA("ScrollingFrame") then
+                            Side.ScrollingEnabled = true
+                        end
+                    end
+                    Library:AttemptSave()
+                end
+            end)
+
+            task.delay(0.1, SubSlider.UpdateColors, SubSlider)
+            SubSlider:Display()
+            SubSlider.Default = SubSlider.Value
+
+            table.insert(Groupbox.Elements, SubSlider)
+            Options[SubIdx] = SubSlider
+
+            return SubSlider
+        end
 
         task.delay(0.1, Slider.UpdateColors, Slider)
         Slider:Display()
@@ -6445,8 +6959,8 @@ do
     Library.MiddleNotificationArea = Library:Create("Frame", {
         AnchorPoint = Vector2.new(0.5, 1);
         BackgroundTransparency = 1;
-        Position = UDim2.new(0.5, 0, 1, -40);
-        Size = UDim2.new(0, 300, 1, -80);
+        Position = UDim2.new(0.5, 0, 1, -110);
+        Size = UDim2.new(0, 300, 1, -120);
         ZIndex = 11000;
         Parent = ScreenGui;
     })
@@ -6462,6 +6976,45 @@ do
         
     function Library:SetNotifySide(Side: string)
         Library.NotifySide = Side
+    end
+
+    function Library:UpdateNotificationAreas()
+        local x = (Library.NotificationPositionX or 50) / 100
+        local y = (Library.NotificationPositionY or 50) / 100
+        if Library.LeftNotificationArea then
+            Library.LeftNotificationArea.AnchorPoint = Vector2.new(0, 0.5)
+            Library.LeftNotificationArea.Position = UDim2.new(0, 0, y, 0)
+        end
+        if Library.RightNotificationArea then
+            Library.RightNotificationArea.AnchorPoint = Vector2.new(1, 0.5)
+            Library.RightNotificationArea.Position = UDim2.new(1, 0, y, 0)
+        end
+        if Library.MiddleNotificationArea then
+            Library.MiddleNotificationArea.AnchorPoint = Vector2.new(0.5, 0.5)
+            Library.MiddleNotificationArea.Position = UDim2.new(x, 0, y, 0)
+        end
+    end
+
+    function Library:SetLowercaseMode(enabled)
+        Library.LowercaseMode = enabled
+        local originals = Library._LowercaseModeOriginals or {}
+        Library._LowercaseModeOriginals = originals
+        if enabled then
+            for _, inst in ipairs(Library.ScreenGui:GetDescendants()) do
+                if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+                    if not originals[inst] then originals[inst] = inst.Text end
+                    inst.Text = string.lower(inst.Text)
+                end
+            end
+        else
+            for inst, original in pairs(originals) do
+                if inst and inst.Parent then inst.Text = original end
+            end
+            Library._LowercaseModeOriginals = {}
+        end
+    end
+
+    function Library:UpdateCursor()
     end
 
     function Library:Notify(...)
@@ -6495,7 +7048,17 @@ do
             end)
         end
 
-        local Side = string.lower(Library.NotifySide)
+        local _align = string.lower(Library.NotificationAlignment or "")
+        local Side
+        if _align == "center" then
+            Side = "middle"
+        elseif _align == "right" then
+            Side = "right"
+        elseif _align == "left" then
+            Side = "left"
+        else
+            Side = string.lower(Library.NotifySide or "left")
+        end
         local XSize, YSize = Library:GetTextBounds(Data.Description, Library.Font, 14)
         YSize = YSize + 7
 
@@ -6506,6 +7069,23 @@ do
             NotifyArea = Library.RightNotificationArea
         else
             NotifyArea = Library.LeftNotificationArea
+        end
+
+        if Library.LimitNotifications and typeof(Library.MaximumNotifications) == "number" then
+            local existingCount = 0
+            for _, child in ipairs(NotifyArea:GetChildren()) do
+                if not child:IsA("UIListLayout") and child.Visible then
+                    existingCount = existingCount + 1
+                end
+            end
+            if existingCount >= Library.MaximumNotifications then
+                for _, child in ipairs(NotifyArea:GetChildren()) do
+                    if not child:IsA("UIListLayout") and child.Visible then
+                        child:Destroy()
+                        break
+                    end
+                end
+            end
         end
 
         local NotifyOuter = Library:Create("Frame", {
@@ -6612,30 +7192,69 @@ do
             RichText = true;
             Parent = InnerFrame;
         })
+        if _forceColor then
+            NotifyLabel.TextColor3 = Library.NotificationFontColor
+        end
+
+        local _barSide = string.lower(Library.NotificationBarSide or "left")
+        local _forceColor = Library.NotificationForceColor
+        local _accentCol = _forceColor and Library.NotificationAccentColor or Library.AccentColor
+        local _outlineCol = _forceColor and Library.NotificationOutlineColor or Library.OutlineColor
+
+        if _forceColor then
+            NotifyInner.BorderColor3 = _outlineCol
+        end
 
         if Side ~= "middle" then
+            local barProps
+            if _barSide == "top" then
+                barProps = {
+                    AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, -1, 0, -1);
+                    Size = UDim2.new(1, 2, 0, 3);
+                }
+            elseif _barSide == "bottom" then
+                barProps = {
+                    AnchorPoint = Vector2.new(0, 1); Position = UDim2.new(0, -1, 1, 1);
+                    Size = UDim2.new(1, 2, 0, 3);
+                }
+            elseif _barSide == "right" then
+                barProps = {
+                    AnchorPoint = Vector2.new(1, 0); Position = UDim2.new(1, 1, 0, -1);
+                    Size = UDim2.new(0, 3, 1, 2);
+                }
+            else
+                barProps = {
+                    AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, -1, 0, -1);
+                    Size = UDim2.new(0, 3, 1, 2);
+                }
+            end
             local SideColor = Library:Create("Frame", {
-                AnchorPoint = Side == "left" and Vector2.new(0, 0) or Vector2.new(1, 0);
-                Position = Side == "left" and UDim2.new(0, -1, 0, -1) or UDim2.new(1, -1, 0, -1);
-                BackgroundColor3 = Library.AccentColor;
+                AnchorPoint = barProps.AnchorPoint;
+                Position = barProps.Position;
+                BackgroundColor3 = _accentCol;
                 BorderSizePixel = 0;
-                Size = UDim2.new(0, 3, 1, 2);
+                Size = barProps.Size;
                 ZIndex = 11004;
                 Parent = NotifyOuter;
             })
-            Library:AddToRegistry(SideColor, { BackgroundColor3 = "AccentColor"; }, true)
+            if not _forceColor then
+                Library:AddToRegistry(SideColor, { BackgroundColor3 = "AccentColor"; }, true)
+            end
         end
 
-        -- progress bar that drains over the notification lifetime
+        local _animatedBar = Library.NotificationAnimatedBar ~= false
         local ProgressBar = Library:Create("Frame", {
-            BackgroundColor3 = Library.AccentColor;
+            BackgroundColor3 = _accentCol;
             BorderSizePixel = 0;
             Position = UDim2.new(0, 0, 1, -2);
             Size = UDim2.new(1, 0, 0, 2);
             ZIndex = 11005;
+            Visible = _animatedBar;
             Parent = InnerFrame;
         })
-        Library:AddToRegistry(ProgressBar, { BackgroundColor3 = "AccentColor" }, true)
+        if not _forceColor then
+            Library:AddToRegistry(ProgressBar, { BackgroundColor3 = "AccentColor" }, true)
+        end
 
         local function _TweenNotify(target, targetSize)
             if not target or not target.Parent then return end
@@ -6701,9 +7320,8 @@ do
         task.delay(0.4, function()
             if Data.Destroyed then return end
 
-            -- animate progress bar drain
             local notifTime = Data.Time
-            if not Data.Persist and typeof(notifTime) == "number" then
+            if _animatedBar and not Data.Persist and typeof(notifTime) == "number" then
                 TweenService:Create(ProgressBar, TweenInfo.new(notifTime, Enum.EasingStyle.Linear), {
                     Size = UDim2.new(0, 0, 0, 2)
                 }):Play()
@@ -7509,7 +8127,7 @@ function Library:CreateWindow(...)
         }
 
         local _tbTextW = Library:GetTextBounds(Tab.Name, Library.Font, 16)
-        local TabButtonWidth = (Library.IgnoreTabSizes and #Tab.Name < Library.IgnoreLimit)
+        local TabButtonWidth = Library.IgnoreTabSizes
             and math.max(_tbTextW, Library.TabSize * 16)
             or _tbTextW
 
@@ -7866,7 +8484,7 @@ end
                 Tab.Name = Name
 
                 local _w = Library:GetTextBounds(Tab.Name, Library.Font, 16)
-                local TabButtonWidth = (Library.IgnoreTabSizes and #Tab.Name < Library.IgnoreLimit)
+                local TabButtonWidth = Library.IgnoreTabSizes
                     and math.max(_w, Library.TabSize * 16)
                     or _w
 
@@ -8261,7 +8879,7 @@ end
             }
 
             local _subBtnTextW = Library:GetTextBounds(SubName, Library.Font, 14)
-            local subBtnW = (Library.IgnoreTabSizes and #SubName < Library.IgnoreLimit)
+            local subBtnW = Library.IgnoreTabSizes
                 and math.max(_subBtnTextW, Library.TabSize * 16)
                 or _subBtnTextW
             subBtnW = subBtnW + 22
@@ -8739,35 +9357,151 @@ end
                 end))
             end
 
-            -- Controller menu support - allow joystick to move cursor and click
-            local ToggleBind = Library.ToggleKeybind
-            local IsControllerToggle = typeof(ToggleBind) == "table" and ToggleBind.Type == "KeyPicker" and 
-                                      ControllerKeysInput and ControllerKeysInput[Enum.KeyCode.ButtonStart] ~= nil
-            
-            if IsControllerToggle or (typeof(ToggleBind) == "table" and ControllerKeysInput[Enum.KeyCode.ButtonStart] == ToggleBind.Value) then
-                pcall(function() RunService:UnbindFromRenderStep("LinoriaControllerMenu") end)
-                RunService:BindToRenderStep("LinoriaControllerMenu", Enum.RenderPriority.Camera.Value - 1, function()
-                    if not Toggled or (not ScreenGui or not ScreenGui.Parent) then
-                        pcall(function() RunService:UnbindFromRenderStep("LinoriaControllerMenu") end)
+            if Library.ControllerSupport then
+                pcall(function() RunService:UnbindFromRenderStep("LinoriaControllerNav") end)
+
+                local CtrlFocusIndex = 0
+                local CtrlFocusHighlight = nil
+                local CtrlVirtualCursor = nil
+                local CtrlVirtualCursorPos = Vector2.new(
+                    workspace.CurrentCamera.ViewportSize.X / 2,
+                    workspace.CurrentCamera.ViewportSize.Y / 2
+                )
+
+                local function GetNavigableElements()
+                    local elements = {}
+                    for _, btn in ipairs(ScreenGui:GetDescendants()) do
+                        if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible and btn.Active ~= false then
+                            local abs = btn.AbsolutePosition
+                            local sz  = btn.AbsoluteSize
+                            if sz.X > 4 and sz.Y > 4 then
+                                table.insert(elements, btn)
+                            end
+                        end
+                    end
+                    table.sort(elements, function(a, b)
+                        local ay = a.AbsolutePosition.Y
+                        local by = b.AbsolutePosition.Y
+                        if math.abs(ay - by) > 4 then return ay < by end
+                        return a.AbsolutePosition.X < b.AbsolutePosition.X
+                    end)
+                    return elements
+                end
+
+                local function SetCtrlHighlight(frame)
+                    if CtrlFocusHighlight then
+                        pcall(function() CtrlFocusHighlight:Destroy() end)
+                        CtrlFocusHighlight = nil
+                    end
+                    if not frame then return end
+                    local hl = Instance.new("UIStroke")
+                    hl.Color = Library.AccentColor
+                    hl.Thickness = 2
+                    hl.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    hl.Parent = frame
+                    CtrlFocusHighlight = hl
+                end
+
+                local function CtrlActivateFocused(elements)
+                    if CtrlFocusIndex < 1 or CtrlFocusIndex > #elements then return end
+                    local el = elements[CtrlFocusIndex]
+                    if el and el.Parent then
+                        pcall(function() el:TriggerEvent("MouseButton1Click") end)
+                    end
+                end
+
+                if Library.ControllerNavType == "Joystick" then
+                    CtrlVirtualCursor = Instance.new("Frame")
+                    CtrlVirtualCursor.Size = UDim2.fromOffset(12, 12)
+                    CtrlVirtualCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+                    CtrlVirtualCursor.BackgroundColor3 = Library.AccentColor
+                    CtrlVirtualCursor.BorderSizePixel = 0
+                    CtrlVirtualCursor.ZIndex = 99999
+                    CtrlVirtualCursor.Position = UDim2.fromOffset(CtrlVirtualCursorPos.X, CtrlVirtualCursorPos.Y)
+                    local corner = Instance.new("UICorner")
+                    corner.CornerRadius = UDim.new(1, 0)
+                    corner.Parent = CtrlVirtualCursor
+                    CtrlVirtualCursor.Parent = ScreenGui
+                end
+
+                local DPadCooldown = 0
+                RunService:BindToRenderStep("LinoriaControllerNav", Enum.RenderPriority.Camera.Value - 1, function(delta)
+                    if not Toggled or not ScreenGui or not ScreenGui.Parent then
+                        pcall(function() RunService:UnbindFromRenderStep("LinoriaControllerNav") end)
+                        SetCtrlHighlight(nil)
+                        if CtrlVirtualCursor then pcall(function() CtrlVirtualCursor:Destroy() end) CtrlVirtualCursor = nil end
                         return
                     end
-                    
-                    -- Right stick for cursor movement
-                    local RightStickPos = InputService:GetGamepadState(Enum.UserInputType.Gamepad1)[Enum.KeyCode.Thumbstick2]
-                    if RightStickPos then
-                        local CurrentMouse = Mouse
-                        local NewX = CurrentMouse.X + (RightStickPos.X * 15)
-                        local NewY = CurrentMouse.Y + (RightStickPos.Y * 15)
-                        
-                        -- Clamp to screen
-                        local ViewportSize = (CurrentMouse.Target and CurrentMouse.Target.Parent:FindFirstChildOfClass("Camera") or workspace.CurrentCamera).ViewportSize
-                        NewX = math.clamp(NewX, 0, ViewportSize.X)
-                        NewY = math.clamp(NewY, 0, ViewportSize.Y)
-                        
-                        CurrentMouse.X = NewX
-                        CurrentMouse.Y = NewY
+
+                    local ok, gamepadState = pcall(function()
+                        return InputService:GetGamepadState(Enum.UserInputType.Gamepad1)
+                    end)
+                    if not ok or not gamepadState then return end
+
+                    if Library.ControllerNavType == "Joystick" then
+                        local stickState = gamepadState[Enum.KeyCode.Thumbstick1] or gamepadState[Enum.KeyCode.Thumbstick2]
+                        if stickState then
+                            local sens = (typeof(Library.ControllerNavSensitivity) == "number" and Library.ControllerNavSensitivity or 5) * 10
+                            local vp = workspace.CurrentCamera.ViewportSize
+                            CtrlVirtualCursorPos = Vector2.new(
+                                math.clamp(CtrlVirtualCursorPos.X + stickState.X * sens * delta, 0, vp.X),
+                                math.clamp(CtrlVirtualCursorPos.Y - stickState.Y * sens * delta, 0, vp.Y)
+                            )
+                            if CtrlVirtualCursor and CtrlVirtualCursor.Parent then
+                                CtrlVirtualCursor.Position = UDim2.fromOffset(CtrlVirtualCursorPos.X, CtrlVirtualCursorPos.Y)
+                            end
+                        end
+                        return
+                    end
+
+                    DPadCooldown = DPadCooldown - delta
+                    if DPadCooldown > 0 then return end
+
+                    local dpadUp   = gamepadState[Enum.KeyCode.DPadUp]
+                    local dpadDown = gamepadState[Enum.KeyCode.DPadDown]
+
+                    local moveDir = 0
+                    if dpadUp   and dpadUp.Position.Z == 1   then moveDir = -1
+                    elseif dpadDown and dpadDown.Position.Z == 1 then moveDir =  1
+                    end
+
+                    if moveDir ~= 0 then
+                        DPadCooldown = 0.18
+                        local elements = GetNavigableElements()
+                        if #elements == 0 then return end
+                        CtrlFocusIndex = CtrlFocusIndex + moveDir
+                        if CtrlFocusIndex < 1 then CtrlFocusIndex = #elements end
+                        if CtrlFocusIndex > #elements then CtrlFocusIndex = 1 end
+                        SetCtrlHighlight(elements[CtrlFocusIndex])
                     end
                 end)
+
+                local CtrlClickConn = InputService.InputBegan:Connect(function(Input)
+                    if not Toggled then return end
+                    if Input.UserInputType ~= Enum.UserInputType.Gamepad1 then return end
+
+                    if Input.KeyCode == Enum.KeyCode.ButtonA then
+                        if Library.ControllerNavType == "Joystick" then
+                            local ok, objs = pcall(function()
+                                return InputService:GetGuiObjectsAtPosition(CtrlVirtualCursorPos.X, CtrlVirtualCursorPos.Y)
+                            end)
+                            if ok and objs and typeof(objs) == "table" then
+                                for _, obj in ipairs(objs) do
+                                    if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+                                        pcall(function() obj:TriggerEvent("MouseButton1Click") end)
+                                        break
+                                    end
+                                end
+                            end
+                        else
+                            local elements = GetNavigableElements()
+                            CtrlActivateFocused(elements)
+                        end
+                    elseif Input.KeyCode == Enum.KeyCode.ButtonB then
+                        Library:Toggle(false)
+                    end
+                end)
+                Library:GiveSignal(CtrlClickConn)
             end
         end
 
