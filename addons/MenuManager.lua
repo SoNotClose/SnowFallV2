@@ -1,4 +1,4 @@
--- for new coders i would reccomend this
+-- very good for new poeple who dont understand lua 
 local MenuManager = {}
 
 function MenuManager:SetLibrary(Library)
@@ -165,6 +165,9 @@ function MenuManager:BuildMenuSection(Tab)
         end;
     })
 
+    self.MenuTab = MenuTab
+    self.NotifTab = NotifTab
+    self.TabBox = TabBox
     return TabBox
 end
 
