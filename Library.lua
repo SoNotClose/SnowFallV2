@@ -2782,6 +2782,8 @@ do
                 Parent = DisplayFrame;
             })
             DisplayFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+            DisplayFrame.Size = UDim2.new(0, 50, 0, 15)
+            DisplayFrame.BorderColor3 = Library.OutlineColor
 
             local GradientBarOuter = Library:Create("Frame", {
                 BorderColor3 = Color3.new(0, 0, 0);
@@ -2863,7 +2865,12 @@ do
                 if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
                     local barPos = GradientBarInner.AbsolutePosition.X
                     local barSize = GradientBarInner.AbsoluteSize.X
-                    local clickTime = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
+                    if barSize <= 0 then return end
+                    local mouseX = Mouse.X - barPos
+                    for _, existingStop in ipairs(GradientStops) do
+                        if math.abs(mouseX - existingStop.Time * barSize) <= 5 then return end
+                    end
+                    local clickTime = math.clamp(mouseX / barSize, 0, 1)
                     local stop = { Time = clickTime, Color = SelectedStop and SelectedStop.Color or Color3.new(1, 1, 1) }
                     table.insert(GradientStops, stop)
                     CreateStopFrame(stop)
@@ -2882,6 +2889,7 @@ do
                 OriginalDisplay(self)
                 DisplayFrame.BackgroundColor3 = Color3.new(1, 1, 1)
                 DisplayFrame.BackgroundTransparency = 0
+                DisplayFrame.BorderColor3 = Library.OutlineColor
                 if SelectedStop then
                     SelectedStop.Color = ColorPicker.Value
                 end
@@ -5877,6 +5885,14 @@ do
 
         Dropdown.Default = Defaults
         Dropdown.DefaultValues = Dropdown.Values
+        Dropdown.TextLabel = DropdownLabel
+
+        function Dropdown:SetText(Text)
+            if typeof(Text) == "string" then
+                Dropdown.Text = Text
+                if DropdownLabel then DropdownLabel.Text = Text end
+            end
+        end
 
         table.insert(Groupbox.Elements, Dropdown)
         Options[Idx] = Dropdown
@@ -6959,15 +6975,15 @@ do
         local x = (Library.NotificationPositionX or 50) / 100
         local y = (Library.NotificationPositionY or 50) / 100
         if Library.LeftNotificationArea then
-            Library.LeftNotificationArea.AnchorPoint = Vector2.new(0, 0.5)
+            Library.LeftNotificationArea.AnchorPoint = Vector2.new(0, 0)
             Library.LeftNotificationArea.Position = UDim2.new(0, 0, y, 0)
         end
         if Library.RightNotificationArea then
-            Library.RightNotificationArea.AnchorPoint = Vector2.new(1, 0.5)
+            Library.RightNotificationArea.AnchorPoint = Vector2.new(1, 0)
             Library.RightNotificationArea.Position = UDim2.new(1, 0, y, 0)
         end
         if Library.MiddleNotificationArea then
-            Library.MiddleNotificationArea.AnchorPoint = Vector2.new(0.5, 0.5)
+            Library.MiddleNotificationArea.AnchorPoint = Vector2.new(x, 1)
             Library.MiddleNotificationArea.Position = UDim2.new(x, 0, y, 0)
         end
     end
@@ -6992,6 +7008,97 @@ do
     end
 
     function Library:UpdateCursor()
+    end
+
+    Library.Languages = {}
+    Library.CurrentLanguage = nil
+    Library._OriginalTexts = {}
+    Library._OriginalTextsSnapped = false
+    Library._LabelRegistry = {}
+    Library._LanguageHooks = {}
+
+    function Library:SetupLanguage(langCode, translations)
+        if not Library.Languages[langCode] then
+            Library.Languages[langCode] = {}
+        end
+        for key, val in pairs(translations) do
+            Library.Languages[langCode][key] = val
+        end
+    end
+
+    function Library:RegisterLabel(key, instance)
+        Library._LabelRegistry[key] = instance
+    end
+
+    function Library:AddLanguageHook(fn)
+        table.insert(Library._LanguageHooks, fn)
+    end
+
+    local function _getTransText(t)
+        if type(t) == "string" then return t end
+        if type(t) == "table" then return t.Text end
+        return nil
+    end
+
+    local function _getTransValues(t)
+        if type(t) == "table" then return t.Values end
+        return nil
+    end
+
+    function Library:SetLanguage(langCode)
+        if not Library._OriginalTextsSnapped then
+            Library._OriginalTextsSnapped = true
+            local function snap(elem, idx)
+                Library._OriginalTexts[idx] = {
+                    Text = elem.Text,
+                    Values = (elem.Values and type(elem.Values) == "table") and { table.unpack(elem.Values) } or nil,
+                }
+            end
+            for idx, elem in pairs(Library.Options) do snap(elem, idx) end
+            for idx, elem in pairs(Library.Toggles) do
+                if not Library._OriginalTexts[idx] then snap(elem, idx) end
+            end
+            for key, inst in pairs(Library._LabelRegistry) do
+                if not Library._OriginalTexts[key] then
+                    Library._OriginalTexts[key] = { Text = inst and inst.Text }
+                end
+            end
+        end
+
+        local trans = langCode and Library.Languages[langCode]
+
+        for idx, origData in pairs(Library._OriginalTexts) do
+            local t = trans and trans[idx]
+            local newText = t ~= nil and _getTransText(t) or origData.Text
+            local newValues = (t ~= nil and _getTransValues(t)) or origData.Values
+
+            local elem = Library.Options[idx] or Library.Toggles[idx]
+            if elem then
+                if newText ~= nil then
+                    elem.Text = newText
+                    if elem.SetText then
+                        elem:SetText(newText)
+                    elseif elem.TextLabel then
+                        elem.TextLabel.Text = newText
+                    elseif elem.Label then
+                        elem.Label.Text = newText
+                    end
+                end
+                if newValues ~= nil and elem.SetValues then
+                    elem:SetValues(newValues)
+                end
+            end
+
+            local inst = Library._LabelRegistry[idx]
+            if inst and newText ~= nil then
+                inst.Text = newText
+            end
+        end
+
+        Library.CurrentLanguage = langCode
+        for _, hook in ipairs(Library._LanguageHooks) do
+            pcall(hook, langCode)
+        end
     end
 
     function Library:Notify(...)
@@ -7219,7 +7326,7 @@ do
             end
         end
 
-        local _animatedBar = Library.NotificationAnimatedBar ~= false
+        local _animatedBar = (Library.NotificationAnimatedBar ~= false) and (_barSide == "top" or _barSide == "bottom" or Side == "middle")
         local ProgressBar = Library:Create("Frame", {
             BackgroundColor3 = _accentCol;
             BorderSizePixel = 0;
@@ -8129,6 +8236,7 @@ function Library:CreateWindow(...)
             ZIndex = 1;
             Parent = TabButton;
         })
+        Tab.ButtonLabel = TabButtonLabel
 
         local TabHighlight = Library:Create("Frame", {
             BackgroundColor3 = Library.AccentColor;
@@ -8518,8 +8626,7 @@ end
                 BackgroundColor3 = "AccentColor";
             })
 
-            -- local GroupboxLabel = 
-            Library:CreateLabel({
+            local GroupboxLabel = Library:CreateLabel({
                 Size = UDim2.new(1, 0, 0, 18);
                 Position = UDim2.new(0, 4, 0, 2);
                 TextSize = 14;
@@ -8528,6 +8635,7 @@ end
                 ZIndex = 5;
                 Parent = BoxInner;
             })
+            Groupbox.TitleLabel = GroupboxLabel
 
             local Container = Library:Create("Frame", {
                 BackgroundTransparency = 1;
@@ -8663,8 +8771,7 @@ end
                     BackgroundColor3 = "MainColor";
                 })
 
-                -- local ButtonLabel = 
-                Library:CreateLabel({
+                local ButtonLabel = Library:CreateLabel({
                     Size = UDim2.new(1, 0, 1, 0);
                     TextSize = 14;
                     Text = Name;
@@ -8673,6 +8780,7 @@ end
                     Parent = Button;
                     RichText = true;
                 })
+                Tab.ButtonLabel = ButtonLabel
 
                 local Block = Library:Create("Frame", {
                     BackgroundColor3 = Library.BackgroundColor;
@@ -8883,7 +8991,7 @@ end
             })
             Library:AddToRegistry(SubBtnInner, { BackgroundColor3 = "BackgroundColor" })
 
-            Library:CreateLabel({
+            local SubBtnLabel = Library:CreateLabel({
                 Position = UDim2.new(0, 5, 0, 0);
                 Size = UDim2.new(1, -10, 1, 0);
                 TextSize = 14;
@@ -8892,6 +9000,7 @@ end
                 ZIndex = 6;
                 Parent = SubBtnInner;
             })
+            SubTab.ButtonLabel = SubBtnLabel
 
             local SubBtnHighlight = Library:Create("Frame", {
                 BackgroundColor3 = Library.AccentColor;
@@ -9148,7 +9257,7 @@ end
                         Parent = TabboxButtons;
                     })
                     Library:AddToRegistry(Button, { BackgroundColor3 = "MainColor" })
-                    Library:CreateLabel({
+                    local ButtonLabel = Library:CreateLabel({
                         Size = UDim2.new(1, 0, 1, 0);
                         TextSize = 14;
                         Text = Name;
@@ -9157,6 +9266,7 @@ end
                         Parent = Button;
                         RichText = true;
                     })
+                    TabboxTab.ButtonLabel = ButtonLabel
                     local Block = Library:Create("Frame", {
                         BackgroundColor3 = Library.BackgroundColor;
                         BorderSizePixel = 0;
