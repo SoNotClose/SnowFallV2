@@ -12,9 +12,7 @@ function MenuManager:BuildMenuSection(Tab)
     local MenuTab = TabBox:AddTab("Menu")
     local NotifTab = TabBox:AddTab("Notifications")
 
-    local MenuGroup = MenuTab:AddLeftGroupbox("Menu")
-
-    MenuGroup:AddToggle("LowercaseMode", {
+    MenuTab:AddToggle("LowercaseMode", {
         Text = "Lowercase Mode";
         Default = Library.LowercaseMode or false;
         Callback = function(val)
@@ -22,7 +20,7 @@ function MenuManager:BuildMenuSection(Tab)
         end;
     })
 
-    MenuGroup:AddToggle("CustomCursor", {
+    MenuTab:AddToggle("CustomCursor", {
         Text = "Custom Cursor";
         Default = Library.ShowCustomCursor or false;
         Callback = function(val)
@@ -30,7 +28,7 @@ function MenuManager:BuildMenuSection(Tab)
         end;
     })
 
-    local CursorDepbox = MenuGroup:AddDependencyBox()
+    local CursorDepbox = MenuTab:AddDependencyBox()
 
     CursorDepbox:AddDropdown("CursorType", {
         Text = "Cursor Type";
@@ -43,9 +41,9 @@ function MenuManager:BuildMenuSection(Tab)
 
     CursorDepbox:SetupDependencies({ { Library.Toggles.CustomCursor, true } })
 
-    MenuGroup:AddDivider()
+    MenuTab:AddDivider()
 
-    MenuGroup:AddToggle("ControllerSupport", {
+    MenuTab:AddToggle("ControllerSupport", {
         Text = "Controller Support";
         Default = Library.ControllerSupport or false;
         Callback = function(val)
@@ -53,7 +51,7 @@ function MenuManager:BuildMenuSection(Tab)
         end;
     })
 
-    local ControllerDepbox = MenuGroup:AddDependencyBox()
+    local ControllerDepbox = MenuTab:AddDependencyBox()
 
     ControllerDepbox:AddDropdown("ControllerNavigation", {
         Text = "Controller Navigation";
@@ -66,9 +64,9 @@ function MenuManager:BuildMenuSection(Tab)
 
     ControllerDepbox:SetupDependencies({ { Library.Toggles.ControllerSupport, true } })
 
-    MenuGroup:AddDivider()
+    MenuTab:AddDivider()
 
-    MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuBind", {
+    MenuTab:AddLabel("Menu Bind"):AddKeyPicker("MenuBind", {
         Default = "RightShift";
         NoUI = true;
         Text = "Menu Bind";
@@ -76,27 +74,33 @@ function MenuManager:BuildMenuSection(Tab)
 
     Library.ToggleKeybind = Library.Options.MenuBind
 
-    local NotifGroup = NotifTab:AddLeftGroupbox("Notifications")
-
-    NotifGroup:AddToggle("NotificationForceColor", {
+    NotifTab:AddToggle("NotificationForceColor", {
         Text = "Force Color";
         Default = Library.NotificationForceColor or false;
         Callback = function(val)
             Library.NotificationForceColor = val
         end;
-    }):AddColorPicker("NotifAccentColor", {
+    })
+
+    local ColorDepbox = NotifTab:AddDependencyBox()
+
+    ColorDepbox:AddColorPicker("NotifAccentColor", {
         Text = "Accent Color";
         Default = Library.NotificationAccentColor or Color3.fromRGB(120, 120, 200);
         Callback = function(val)
             Library.NotificationAccentColor = val
         end;
-    }):AddColorPicker("NotifOutlineColor", {
+    })
+
+    ColorDepbox:AddColorPicker("NotifOutlineColor", {
         Text = "Outline Color";
         Default = Library.NotificationOutlineColor or Color3.fromRGB(60, 60, 80);
         Callback = function(val)
             Library.NotificationOutlineColor = val
         end;
-    }):AddColorPicker("NotifFontColor", {
+    })
+
+    ColorDepbox:AddColorPicker("NotifFontColor", {
         Text = "Font Color";
         Default = Library.NotificationFontColor or Color3.fromRGB(255, 255, 255);
         Callback = function(val)
@@ -104,9 +108,11 @@ function MenuManager:BuildMenuSection(Tab)
         end;
     })
 
-    NotifGroup:AddDivider()
+    ColorDepbox:SetupDependencies({ { Library.Toggles.NotificationForceColor, true } })
 
-    NotifGroup:AddToggle("NotificationAnimatedBar", {
+    NotifTab:AddDivider()
+
+    NotifTab:AddToggle("NotificationAnimatedBar", {
         Text = "Animated Bar";
         Default = Library.NotificationAnimatedBar ~= false;
         Callback = function(val)
@@ -114,7 +120,7 @@ function MenuManager:BuildMenuSection(Tab)
         end;
     })
 
-    NotifGroup:AddSlider("NotificationPositionX", {
+    NotifTab:AddSlider("NotificationPositionX", {
         Text = "Position X";
         Default = Library.NotificationPositionX or 50;
         Min = 0; Max = 100; Rounding = 0;
@@ -134,7 +140,7 @@ function MenuManager:BuildMenuSection(Tab)
         end;
     })
 
-    NotifGroup:AddDropdown("NotificationAlignment", {
+    NotifTab:AddDropdown("NotificationAlignment", {
         Text = "Alignment";
         Values = { "Left", "Right", "Center" };
         Default = Library.NotificationAlignment or "Center";
@@ -143,7 +149,7 @@ function MenuManager:BuildMenuSection(Tab)
         end;
     })
 
-    NotifGroup:AddDropdown("NotificationBarSide", {
+    NotifTab:AddDropdown("NotificationBarSide", {
         Text = "Bar Side";
         Values = { "Left", "Top", "Right", "Bottom" };
         Default = Library.NotificationBarSide or "Left";
@@ -152,18 +158,18 @@ function MenuManager:BuildMenuSection(Tab)
         end;
     })
 
-    NotifGroup:AddDivider()
+    NotifTab:AddDivider()
 
-    local TestInput = NotifGroup:AddInput("TestNotifMessage", {
+    local TestInput = NotifTab:AddInput("TestNotifMessage", {
         Text = "Test Message";
         Default = "Hello world!";
         Numeric = false;
         Finished = false;
     })
 
-    NotifGroup:AddButton("SendTestNotification", {
+    NotifTab:AddButton({
         Text = "Send Notification";
-        Callback = function()
+        Func = function()
             Library:Notify({ Title = "Test"; Description = TestInput.Value or "Hello world!"; Time = 4 })
         end;
     })
