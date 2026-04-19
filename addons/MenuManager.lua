@@ -1,3 +1,4 @@
+-- for new coders i would reccomend this
 local MenuManager = {}
 
 function MenuManager:SetLibrary(Library)
@@ -80,35 +81,25 @@ function MenuManager:BuildMenuSection(Tab)
         Callback = function(val)
             Library.NotificationForceColor = val
         end;
-    })
-
-    local ColorDepbox = NotifTab:AddDependencyBox()
-
-    ColorDepbox:AddColorPicker("NotifAccentColor", {
-        Text = "Accent Color";
+    }):AddColorPicker("NotifAccentColor", {
         Default = Library.NotificationAccentColor or Color3.fromRGB(120, 120, 200);
+        Title = "Accent Color";
         Callback = function(val)
             Library.NotificationAccentColor = val
         end;
-    })
-
-    ColorDepbox:AddColorPicker("NotifOutlineColor", {
-        Text = "Outline Color";
+    }):AddColorPicker("NotifOutlineColor", {
         Default = Library.NotificationOutlineColor or Color3.fromRGB(60, 60, 80);
+        Title = "Outline Color";
         Callback = function(val)
             Library.NotificationOutlineColor = val
         end;
-    })
-
-    ColorDepbox:AddColorPicker("NotifFontColor", {
-        Text = "Font Color";
+    }):AddColorPicker("NotifFontColor", {
         Default = Library.NotificationFontColor or Color3.fromRGB(255, 255, 255);
+        Title = "Font Color";
         Callback = function(val)
             Library.NotificationFontColor = val
         end;
     })
-
-    ColorDepbox:SetupDependencies({ { Library.Toggles.NotificationForceColor, true } })
 
     NotifTab:AddDivider()
 
