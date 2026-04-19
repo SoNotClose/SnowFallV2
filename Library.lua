@@ -2812,8 +2812,38 @@ do
                     Position = UDim2.new(math.clamp(stop.Time, 0, 1), 0, 0.5, 0);
                     Size = UDim2.new(0, 8, 0, 14);
                     ZIndex = 21;
+                    Active = true;
                     Parent = GradientBarInner;
                 })
+
+                stop.Frame.InputBegan:Connect(function(Input)
+                    local barPos = GradientBarInner.AbsolutePosition.X
+                    local barSize = GradientBarInner.AbsoluteSize.X
+                    if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+                        SelectedStop = stop
+                        ColorPicker:SetHSVFromRGB(stop.Color)
+                        ColorPicker:Display()
+                        RefreshGradientVisuals()
+                        while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                            stop.Time = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
+                            RefreshGradientVisuals()
+                            RunService.RenderStepped:Wait()
+                        end
+                        RunCallback()
+                        Library:AttemptSave()
+                    elseif Input.UserInputType == Enum.UserInputType.MouseButton2 and #GradientStops > 2 then
+                        local idx = table.find(GradientStops, stop)
+                        stop.Frame:Destroy()
+                        table.remove(GradientStops, idx)
+                        if SelectedStop == stop then
+                            SelectedStop = GradientStops[math.min(idx, #GradientStops)]
+                        end
+                        ColorPicker:SetHSVFromRGB(SelectedStop.Color)
+                        ColorPicker:Display()
+                        RefreshGradientVisuals()
+                        RunCallback()
+                    end
+                end)
             end
 
             local function InitStopsFromColorSequence(cs)
@@ -2834,66 +2864,13 @@ do
                     local barPos = GradientBarInner.AbsolutePosition.X
                     local barSize = GradientBarInner.AbsoluteSize.X
                     local clickTime = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
-
-                    local nearestStop = nil
-                    local nearestPixelDist = math.huge
-                    for _, stop in ipairs(GradientStops) do
-                        local dist = math.abs(stop.Time - clickTime) * barSize
-                        if dist < nearestPixelDist then
-                            nearestPixelDist = dist
-                            nearestStop = stop
-                        end
-                    end
-
-                    if nearestStop and nearestPixelDist <= 6 then
-                        SelectedStop = nearestStop
-                        ColorPicker:SetHSVFromRGB(SelectedStop.Color)
-                        ColorPicker:Display()
-                        RefreshGradientVisuals()
-
-                        while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                            SelectedStop.Time = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
-                            RefreshGradientVisuals()
-                            RunService.RenderStepped:Wait()
-                        end
-                        RunCallback()
-                        Library:AttemptSave()
-                    else
-                        local stop = { Time = clickTime, Color = SelectedStop and SelectedStop.Color or Color3.new(1, 1, 1) }
-                        table.insert(GradientStops, stop)
-                        CreateStopFrame(stop)
-                        SelectedStop = stop
-                        RefreshGradientVisuals()
-                        RunCallback()
-                        Library:AttemptSave()
-                    end
-                elseif Input.UserInputType == Enum.UserInputType.MouseButton2 and #GradientStops > 2 then
-                    local barPos = GradientBarInner.AbsolutePosition.X
-                    local barSize = GradientBarInner.AbsoluteSize.X
-                    local clickTime = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
-
-                    local nearestStop = nil
-                    local nearestPixelDist = math.huge
-                    for _, stop in ipairs(GradientStops) do
-                        local dist = math.abs(stop.Time - clickTime) * barSize
-                        if dist < nearestPixelDist then
-                            nearestPixelDist = dist
-                            nearestStop = stop
-                        end
-                    end
-
-                    if nearestStop and nearestPixelDist <= 6 then
-                        local idx = table.find(GradientStops, nearestStop)
-                        nearestStop.Frame:Destroy()
-                        table.remove(GradientStops, idx)
-                        if SelectedStop == nearestStop then
-                            SelectedStop = GradientStops[math.min(idx, #GradientStops)]
-                        end
-                        ColorPicker:SetHSVFromRGB(SelectedStop.Color)
-                        ColorPicker:Display()
-                        RefreshGradientVisuals()
-                        RunCallback()
-                    end
+                    local stop = { Time = clickTime, Color = SelectedStop and SelectedStop.Color or Color3.new(1, 1, 1) }
+                    table.insert(GradientStops, stop)
+                    CreateStopFrame(stop)
+                    SelectedStop = stop
+                    RefreshGradientVisuals()
+                    RunCallback()
+                    Library:AttemptSave()
                 end
             end)
 
