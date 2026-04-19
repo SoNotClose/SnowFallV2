@@ -343,109 +343,151 @@ function SaveManager:SetLibrary(library)
             if ok then pcall(writefile, prefsFile, encoded) end
         end
 
+        local lib = self.Library
         local section = tab:AddRightGroupbox('Configuration')
+        if section.TitleLabel then
+            lib:RegisterLabel("SaveManager_configGroupTitle", section.TitleLabel)
+        end
 
         section:AddInput('SaveManager_ConfigName', { Text = 'Config name' })
-        section:AddButton('Create config', function()
-            local name = self.Library.Options.SaveManager_ConfigName.Value
+        local _createConfigBtn = section:AddButton('Create config', function()
+            local name = lib.Options.SaveManager_ConfigName.Value
 
             if name:gsub(' ', '') == '' then
-                self.Library:Notify('Invalid config name (empty)', 2)
+                lib:Notify('Invalid config name (empty)', 2)
                 return
             end
 
             local success, err = self:Save(name)
             if not success then
-                self.Library:Notify('Failed to create config: ' .. err)
+                lib:Notify('Failed to create config: ' .. err)
                 return
             end
 
-            self.Library:Notify(string.format('Created config %q', name))
-            self.Library.Options.SaveManager_ConfigList:SetValues(self:RefreshConfigList())
-            self.Library.Options.SaveManager_ConfigList:SetValue(nil)
+            lib:Notify(string.format('Created config %q', name))
+            lib.Options.SaveManager_ConfigList:SetValues(self:RefreshConfigList())
+            lib.Options.SaveManager_ConfigList:SetValue(nil)
         end)
+        lib:RegisterLabel("SaveManager_createConfigBtn", _createConfigBtn.Label)
 
         section:AddDivider()
 
         section:AddDropdown('SaveManager_ConfigList', { Text = 'Config list', Values = self:RefreshConfigList(), AllowNull = true })
-        section:AddButton('Load config', function()
-            local name = self.Library.Options.SaveManager_ConfigList.Value
+        local _loadConfigBtn = section:AddButton('Load config', function()
+            local name = lib.Options.SaveManager_ConfigList.Value
 
             local success, err = self:Load(name)
             if not success then
-                self.Library:Notify('Failed to load config: ' .. err)
+                lib:Notify('Failed to load config: ' .. err)
                 return
             end
 
-            self.Library:Notify(string.format('Config %q loaded', name))
+            lib:Notify(string.format('Config %q loaded', name))
         end)
-        section:AddButton('Overwrite config', function()
-            local name = self.Library.Options.SaveManager_ConfigList.Value
+        lib:RegisterLabel("SaveManager_loadConfigBtn", _loadConfigBtn.Label)
+        local _overwriteConfigBtn = section:AddButton('Overwrite config', function()
+            local name = lib.Options.SaveManager_ConfigList.Value
 
             local success, err = self:Save(name)
             if not success then
-                self.Library:Notify('Failed to overwrite config: ' .. err)
+                lib:Notify('Failed to overwrite config: ' .. err)
                 return
             end
 
-            self.Library:Notify(string.format('Overwrote config %q', name))
+            lib:Notify(string.format('Overwrote config %q', name))
         end)
-        section:AddButton('Delete config', function()
-            local name = self.Library.Options.SaveManager_ConfigList.Value
+        lib:RegisterLabel("SaveManager_overwriteConfigBtn", _overwriteConfigBtn.Label)
+        local _deleteConfigBtn = section:AddButton('Delete config', function()
+            local name = lib.Options.SaveManager_ConfigList.Value
 
             local success, err = self:Delete(name)
             if not success then
-                self.Library:Notify('Failed to delete config: ' .. err)
+                lib:Notify('Failed to delete config: ' .. err)
                 return
             end
 
-            self.Library:Notify(string.format('Deleted config %q', name))
-            self.Library.Options.SaveManager_ConfigList:SetValues(self:RefreshConfigList())
-            self.Library.Options.SaveManager_ConfigList:SetValue(nil)
+            lib:Notify(string.format('Deleted config %q', name))
+            lib.Options.SaveManager_ConfigList:SetValues(self:RefreshConfigList())
+            lib.Options.SaveManager_ConfigList:SetValue(nil)
         end)
-        section:AddButton('Refresh list', function()
+        lib:RegisterLabel("SaveManager_deleteConfigBtn", _deleteConfigBtn.Label)
+        local _refreshListBtn = section:AddButton('Refresh list', function()
             local configs = self:RefreshConfigList()
-            self.Library.Options.SaveManager_ConfigList:SetValues(configs)
-            self.Library.Options.SaveManager_ConfigList:SetValue(nil)
+            lib.Options.SaveManager_ConfigList:SetValues(configs)
+            lib.Options.SaveManager_ConfigList:SetValue(nil)
         end)
+        lib:RegisterLabel("SaveManager_refreshListBtn", _refreshListBtn.Label)
 
         self.AutoSaveLabel = section:AddLabel('Autosave: None')
         self.AutoloadConfigLabel = section:AddLabel('Autoload: None')
 
-        section:AddButton('Set as autosave', function()
-            local name = self.Library.Options.SaveManager_ConfigList.Value
+        local _setAutosaveBtn = section:AddButton('Set as autosave', function()
+            local name = lib.Options.SaveManager_ConfigList.Value
             if not name or name == '' then
-                self.Library:Notify('Select a config from the list first', 2)
+                lib:Notify('Select a config from the list first', 2)
                 return
             end
             AutoSaveConfig = name
             self.AutoSaveLabel:SetText('Autosave: ' .. name)
             SaveAutoPrefs()
-            self.Library:Notify(string.format('Autosave config set to %q', name))
+            lib:Notify(string.format('Autosave config set to %q', name))
         end)
-        section:AddButton('Set as autoload', function()
-            local name = self.Library.Options.SaveManager_ConfigList.Value
+        lib:RegisterLabel("SaveManager_setAutosaveBtn", _setAutosaveBtn.Label)
+        local _setAutoloadBtn = section:AddButton('Set as autoload', function()
+            local name = lib.Options.SaveManager_ConfigList.Value
             if not name or name == '' then
-                self.Library:Notify('Select a config from the list first', 2)
+                lib:Notify('Select a config from the list first', 2)
                 return
             end
             AutoLoadConfig = name
             self.AutoloadConfigLabel:SetText('Autoload: ' .. name)
             SaveAutoPrefs()
-            self.Library:Notify(string.format('Autoload config set to %q', name))
+            lib:Notify(string.format('Autoload config set to %q', name))
         end)
-        section:AddButton('Reset autosave', function()
+        lib:RegisterLabel("SaveManager_setAutoloadBtn", _setAutoloadBtn.Label)
+        local _resetAutosaveBtn = section:AddButton('Reset autosave', function()
             AutoSaveConfig = ''
             self.AutoSaveLabel:SetText('Autosave: None')
             SaveAutoPrefs()
-            self.Library:Notify('Autosave config cleared')
+            lib:Notify('Autosave config cleared')
         end)
-        section:AddButton('Reset autoload', function()
+        lib:RegisterLabel("SaveManager_resetAutosaveBtn", _resetAutosaveBtn.Label)
+        local _resetAutoloadBtn = section:AddButton('Reset autoload', function()
             AutoLoadConfig = ''
             self.AutoloadConfigLabel:SetText('Autoload: None')
             SaveAutoPrefs()
-            self.Library:Notify('Autoload config cleared')
+            lib:Notify('Autoload config cleared')
         end)
+        lib:RegisterLabel("SaveManager_resetAutoloadBtn", _resetAutoloadBtn.Label)
+
+        lib:SetupLanguage("es", {
+            SaveManager_configGroupTitle    = "Configuración",
+            SaveManager_ConfigName          = { Text = "Nombre de config" },
+            SaveManager_ConfigList          = { Text = "Lista de configs" },
+            SaveManager_createConfigBtn     = "Crear config",
+            SaveManager_loadConfigBtn       = "Cargar config",
+            SaveManager_overwriteConfigBtn  = "Sobreescribir config",
+            SaveManager_deleteConfigBtn     = "Eliminar config",
+            SaveManager_refreshListBtn      = "Actualizar lista",
+            SaveManager_setAutosaveBtn      = "Autoguardar config",
+            SaveManager_setAutoloadBtn      = "Autocarga config",
+            SaveManager_resetAutosaveBtn    = "Reiniciar autoguardar",
+            SaveManager_resetAutoloadBtn    = "Reiniciar autocarga",
+        })
+        lib:SetupLanguage("fr", {
+            SaveManager_configGroupTitle    = "Configuration",
+            SaveManager_ConfigName          = { Text = "Nom de config" },
+            SaveManager_ConfigList          = { Text = "Liste de configs" },
+            SaveManager_createConfigBtn     = "Créer config",
+            SaveManager_loadConfigBtn       = "Charger config",
+            SaveManager_overwriteConfigBtn  = "Écraser config",
+            SaveManager_deleteConfigBtn     = "Supprimer config",
+            SaveManager_refreshListBtn      = "Actualiser la liste",
+            SaveManager_setAutosaveBtn      = "Config sauvegarde auto",
+            SaveManager_setAutoloadBtn      = "Config chargement auto",
+            SaveManager_resetAutosaveBtn    = "Réinitialiser sauvegarde auto",
+            SaveManager_resetAutoloadBtn    = "Réinitialiser chargement auto",
+        })
 
         task.defer(function()
             ClearAutoSaveConnections()
