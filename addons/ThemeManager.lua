@@ -509,12 +509,31 @@ local ThemeManager = {} do
     end
 
     function ThemeManager:CreateThemeManager(groupbox)
-        groupbox:AddLabel('Background color'):AddColorPicker('BackgroundColor', { Default = self.Library.BackgroundColor })
-        groupbox:AddLabel('Main color')      :AddColorPicker('MainColor',       { Default = self.Library.MainColor })
-        groupbox:AddLabel('Accent color')    :AddColorPicker('AccentColor',     { Default = self.Library.AccentColor })
-        groupbox:AddLabel('Outline color')   :AddColorPicker('OutlineColor',    { Default = self.Library.OutlineColor })
-        groupbox:AddLabel('Font color')      :AddColorPicker('FontColor',       { Default = self.Library.FontColor })
-        groupbox:AddLabel('Risk color')      :AddColorPicker('RiskColor',       { Default = self.Library.RiskColor })
+        local lib = self.Library
+
+        local _L = {}
+        _L.bgColor     = groupbox:AddLabel('Background color')
+        _L.bgColor:AddColorPicker('BackgroundColor', { Default = lib.BackgroundColor })
+        _L.mainColor   = groupbox:AddLabel('Main color')
+        _L.mainColor:AddColorPicker('MainColor',       { Default = lib.MainColor })
+        _L.accentColor = groupbox:AddLabel('Accent color')
+        _L.accentColor:AddColorPicker('AccentColor',   { Default = lib.AccentColor })
+        _L.outlineColor = groupbox:AddLabel('Outline color')
+        _L.outlineColor:AddColorPicker('OutlineColor', { Default = lib.OutlineColor })
+        _L.fontColor   = groupbox:AddLabel('Font color')
+        _L.fontColor:AddColorPicker('FontColor',       { Default = lib.FontColor })
+        _L.riskColor   = groupbox:AddLabel('Risk color')
+        _L.riskColor:AddColorPicker('RiskColor',       { Default = lib.RiskColor })
+
+        lib:RegisterLabel("ThemeManager_bgColorLabel",      _L.bgColor.TextLabel)
+        lib:RegisterLabel("ThemeManager_mainColorLabel",    _L.mainColor.TextLabel)
+        lib:RegisterLabel("ThemeManager_accentColorLabel",  _L.accentColor.TextLabel)
+        lib:RegisterLabel("ThemeManager_outlineColorLabel", _L.outlineColor.TextLabel)
+        lib:RegisterLabel("ThemeManager_fontColorLabel",    _L.fontColor.TextLabel)
+        lib:RegisterLabel("ThemeManager_riskColorLabel",    _L.riskColor.TextLabel)
+        if groupbox.TitleLabel then
+            lib:RegisterLabel("ThemeManager_themesGroup", groupbox.TitleLabel)
+        end
 
         groupbox:AddToggle('ThemeManager_AutoSetTheme', { Text = 'Auto Set Theme', Default = true })
 
@@ -528,12 +547,13 @@ local ThemeManager = {} do
             self.Library:Notify(string.format('Applied theme: %s', theme), 2)
         end)
         SetThemeButton:SetVisible(false)
+        lib:RegisterLabel("ThemeManager_setThemeBtn", SetThemeButton.Label)
 
         self.Library.Toggles.ThemeManager_AutoSetTheme:OnChanged(function()
             SetThemeButton:SetVisible(not self.Library.Toggles.ThemeManager_AutoSetTheme.Value)
         end)
 
-        groupbox:AddButton('Set As Default', function()
+        local _setDefaultBtn = groupbox:AddButton('Set As Default', function()
             local theme = GetCurrentlySelectedTheme(self.Library)
             if not theme then
                 self.Library:Notify('No theme selected', 2)
@@ -542,6 +562,7 @@ local ThemeManager = {} do
             self:SaveDefault(theme)
             self.Library:Notify(string.format('Set default theme to %q', theme))
         end)
+        lib:RegisterLabel("ThemeManager_setDefaultBtn", _setDefaultBtn.Label)
 
         groupbox:AddDivider()
 
@@ -628,15 +649,16 @@ local ThemeManager = {} do
             Default   = 1,
         })
 
-        groupbox:AddButton('Refresh Web Themes', function()
+        local _refreshWebBtn = groupbox:AddButton('Refresh Web Themes', function()
             WebThemeCache = nil
             local themes = FetchWebThemes()
             self.Library.Options.ThemeManager_WebThemeList:SetValues(themes)
             self.Library.Options.ThemeManager_WebThemeList:SetValue(nil)
             self.Library:Notify('Refreshed web themes', 2)
         end)
+        lib:RegisterLabel("ThemeManager_refreshWebBtn", _refreshWebBtn.Label)
 
-        groupbox:AddButton('Download Theme', function()
+        local _downloadThemeBtn = groupbox:AddButton('Download Theme', function()
             local name = self.Library.Options.ThemeManager_WebThemeList.Value
             if not name or name == '' then
                 self.Library:Notify('No web theme selected', 2)
@@ -653,11 +675,12 @@ local ThemeManager = {} do
             self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
         end)
+        lib:RegisterLabel("ThemeManager_downloadThemeBtn", _downloadThemeBtn.Label)
 
         groupbox:AddDivider()
 
         groupbox:AddInput('ThemeManager_CustomThemeName', { Text = 'Custom theme name' })
-        groupbox:AddButton('Create theme', function()
+        local _createThemeBtn = groupbox:AddButton('Create theme', function()
             local name = self.Library.Options.ThemeManager_CustomThemeName.Value
             if name:gsub(" ", "") == "" then
                 self.Library:Notify("Invalid theme name (empty)", 2)
@@ -669,8 +692,9 @@ local ThemeManager = {} do
             self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
         end)
+        lib:RegisterLabel("ThemeManager_createThemeBtn", _createThemeBtn.Label)
 
-        groupbox:AddButton('Export theme', function()
+        local _exportThemeBtn = groupbox:AddButton('Export theme', function()
             local name = self.Library.Options.ThemeManager_CustomThemeName.Value
             if name:gsub(" ", "") == "" then
                 self.Library:Notify("Enter a name in the theme name field first", 2)
@@ -680,6 +704,7 @@ local ThemeManager = {} do
             self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
         end)
+        lib:RegisterLabel("ThemeManager_exportThemeBtn", _exportThemeBtn.Label)
 
         groupbox:AddDivider()
 
@@ -701,19 +726,21 @@ local ThemeManager = {} do
             end
         end)
 
-        groupbox:AddButton('Load theme', function()
+        local _loadThemeBtn = groupbox:AddButton('Load theme', function()
             local name = self.Library.Options.ThemeManager_CustomThemeList.Value
             if not name or name == '' then self.Library:Notify('No custom theme selected', 2) return end
             self:ApplyTheme(name)
             self.Library:Notify(string.format('Loaded theme %q', name))
         end)
-        groupbox:AddButton('Overwrite theme', function()
+        lib:RegisterLabel("ThemeManager_loadThemeBtn", _loadThemeBtn.Label)
+        local _overwriteThemeBtn = groupbox:AddButton('Overwrite theme', function()
             local name = self.Library.Options.ThemeManager_CustomThemeList.Value
             if not name or name == '' then self.Library:Notify('No custom theme selected', 2) return end
             self:SaveCustomTheme(name)
             self.Library:Notify(string.format('Overwrote theme %q', name))
         end)
-        groupbox:AddButton('Delete theme', function()
+        lib:RegisterLabel("ThemeManager_overwriteThemeBtn", _overwriteThemeBtn.Label)
+        local _deleteThemeBtn = groupbox:AddButton('Delete theme', function()
             local name = self.Library.Options.ThemeManager_CustomThemeList.Value
             if not name or name == '' then self.Library:Notify('No custom theme selected', 2) return end
 
@@ -727,11 +754,13 @@ local ThemeManager = {} do
             self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
         end)
-        groupbox:AddButton('Refresh list', function()
+        lib:RegisterLabel("ThemeManager_deleteThemeBtn", _deleteThemeBtn.Label)
+        local _refreshListBtn = groupbox:AddButton('Refresh list', function()
             self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
         end)
-        groupbox:AddButton('Reset default', function()
+        lib:RegisterLabel("ThemeManager_refreshListBtn", _refreshListBtn.Label)
+        local _resetDefaultBtn = groupbox:AddButton('Reset default', function()
             local success = pcall(delfile, self.Folder .. '/themes/default.txt')
             if not success then
                 self.Library:Notify('Failed to reset default: delete file error')
@@ -744,11 +773,12 @@ local ThemeManager = {} do
             self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
         end)
+        lib:RegisterLabel("ThemeManager_resetDefaultBtn", _resetDefaultBtn.Label)
 
         groupbox:AddDivider()
 
         groupbox:AddInput('ThemeManager_VideoURL', { Text = 'Video background (asset ID or rbxassetid://)' })
-        groupbox:AddButton('Set video background', function()
+        local _setVideoBgBtn = groupbox:AddButton('Set video background', function()
             local url = self.Library.Options.ThemeManager_VideoURL.Value
             if not url or url:gsub(' ', '') == '' then
                 self.Library:Notify('Enter an asset ID or rbxassetid:// URL', 2)
@@ -764,7 +794,8 @@ local ThemeManager = {} do
                 self.Library:Notify('Video background set', 2)
             end
         end)
-        groupbox:AddButton('Clear video background', function()
+        lib:RegisterLabel("ThemeManager_setVideoBgBtn", _setVideoBgBtn.Label)
+        local _clearVideoBgBtn = groupbox:AddButton('Clear video background', function()
             if self.Library.InnerVideoBackground then
                 self.Library.InnerVideoBackground.Playing = false
                 self.Library.InnerVideoBackground.Visible = false
@@ -775,6 +806,66 @@ local ThemeManager = {} do
             end
             self.Library:Notify('Video background cleared', 2)
         end)
+        lib:RegisterLabel("ThemeManager_clearVideoBgBtn", _clearVideoBgBtn.Label)
+
+        lib:SetupLanguage("es", {
+            ThemeManager_themesGroup          = "Temas",
+            ThemeManager_bgColorLabel         = "Color de fondo",
+            ThemeManager_mainColorLabel       = "Color principal",
+            ThemeManager_accentColorLabel     = "Color de acento",
+            ThemeManager_outlineColorLabel    = "Color de contorno",
+            ThemeManager_fontColorLabel       = "Color de fuente",
+            ThemeManager_riskColorLabel       = "Color de riesgo",
+            ThemeManager_AutoSetTheme         = { Text = "Tema automático" },
+            ThemeManager_ThemeList            = { Text = "Temas integrados" },
+            ThemeManager_AnimatedThemeList    = { Text = "Temas animados" },
+            ThemeManager_WebThemeList         = { Text = "Temas web" },
+            ThemeManager_CustomThemeList      = { Text = "Temas personalizados" },
+            ThemeManager_CustomThemeName      = { Text = "Nombre del tema" },
+            ThemeManager_VideoURL             = { Text = "Fondo de video" },
+            ThemeManager_setThemeBtn          = "Aplicar tema",
+            ThemeManager_setDefaultBtn        = "Establecer por defecto",
+            ThemeManager_refreshWebBtn        = "Actualizar temas web",
+            ThemeManager_downloadThemeBtn     = "Descargar tema",
+            ThemeManager_createThemeBtn       = "Crear tema",
+            ThemeManager_exportThemeBtn       = "Exportar tema",
+            ThemeManager_loadThemeBtn         = "Cargar tema",
+            ThemeManager_overwriteThemeBtn    = "Sobreescribir tema",
+            ThemeManager_deleteThemeBtn       = "Eliminar tema",
+            ThemeManager_refreshListBtn       = "Actualizar lista",
+            ThemeManager_resetDefaultBtn      = "Restablecer por defecto",
+            ThemeManager_setVideoBgBtn        = "Establecer fondo de video",
+            ThemeManager_clearVideoBgBtn      = "Eliminar fondo de video",
+        })
+        lib:SetupLanguage("fr", {
+            ThemeManager_themesGroup          = "Thèmes",
+            ThemeManager_bgColorLabel         = "Couleur de fond",
+            ThemeManager_mainColorLabel       = "Couleur principale",
+            ThemeManager_accentColorLabel     = "Couleur d'accent",
+            ThemeManager_outlineColorLabel    = "Couleur de contour",
+            ThemeManager_fontColorLabel       = "Couleur de police",
+            ThemeManager_riskColorLabel       = "Couleur à risque",
+            ThemeManager_AutoSetTheme         = { Text = "Thème automatique" },
+            ThemeManager_ThemeList            = { Text = "Thèmes intégrés" },
+            ThemeManager_AnimatedThemeList    = { Text = "Thèmes animés" },
+            ThemeManager_WebThemeList         = { Text = "Thèmes web" },
+            ThemeManager_CustomThemeList      = { Text = "Thèmes personnalisés" },
+            ThemeManager_CustomThemeName      = { Text = "Nom du thème" },
+            ThemeManager_VideoURL             = { Text = "Fond vidéo" },
+            ThemeManager_setThemeBtn          = "Appliquer le thème",
+            ThemeManager_setDefaultBtn        = "Définir par défaut",
+            ThemeManager_refreshWebBtn        = "Actualiser thèmes web",
+            ThemeManager_downloadThemeBtn     = "Télécharger le thème",
+            ThemeManager_createThemeBtn       = "Créer un thème",
+            ThemeManager_exportThemeBtn       = "Exporter le thème",
+            ThemeManager_loadThemeBtn         = "Charger le thème",
+            ThemeManager_overwriteThemeBtn    = "Écraser le thème",
+            ThemeManager_deleteThemeBtn       = "Supprimer le thème",
+            ThemeManager_refreshListBtn       = "Actualiser la liste",
+            ThemeManager_resetDefaultBtn      = "Réinitialiser par défaut",
+            ThemeManager_setVideoBgBtn        = "Définir le fond vidéo",
+            ThemeManager_clearVideoBgBtn      = "Effacer le fond vidéo",
+        })
 
         self:LoadDefault()
 
