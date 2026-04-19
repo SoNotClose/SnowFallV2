@@ -479,10 +479,8 @@ function SaveManager:SetLibrary(library)
                 end
             end
 
-            -- wait for library to finish registering all elements
             task.wait()
 
-            -- restore persisted prefs
             if isfile(prefsFile) then
                 local ok, decoded = pcall(function()
                     return HttpService:JSONDecode(readfile(prefsFile))
@@ -495,7 +493,6 @@ function SaveManager:SetLibrary(library)
                 end
             end
 
-            -- auto-load on startup if configured
             if AutoLoadConfig ~= '' then
                 local success, err = self:Load(AutoLoadConfig)
                 if success then
