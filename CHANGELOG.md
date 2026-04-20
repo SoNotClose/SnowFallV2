@@ -1,3 +1,9 @@
+## 4.20.26
+```diff
++ Improved Gradient Color Picker
++ Added AddDraggableLabel
+```
+
 ## 4.19.26
 ```diff
 + Fixed a issue when setting languages where tabs wont resize
