@@ -2,8 +2,8 @@
 > This is a maintained fork of LinoriaLib. This is not the original LinoriaLib repository.<br />
 > Changelogs: [Changelogs](CHANGELOG.md)
 
-# LinoriaLib
-A Roblox UI library inspired by Splix, BBot and many others.
+# Snowfall
+A Roblox UI library inspired by Splix, LLib, BBot and many others.
 
 ###### Original repository
 * [violin-suzutsuki/LinoriaLib](https://github.com/violin-suzutsuki/LinoriaLib)
@@ -12,19 +12,24 @@ A Roblox UI library inspired by Splix, BBot and many others.
 * [Example](Example.lua)
 
 ###### Interface Addons:
-* [Theme Manager](addons/ThemeManager.lua)&nbsp;&nbsp;|&nbsp;&nbsp;[Save Manager](addons/SaveManager.lua) 
+* [Menu Manager](addons/MenuManager.lua)&nbsp;&nbsp;|[Theme Manager](addons/ThemeManager.lua)&nbsp;&nbsp;|&nbsp;&nbsp;[Save Manager](addons/SaveManager.lua) 
 
 ## Features
-- Tabs, group boxes, and tab boxes
+- Tabs, Subtabs, group boxes, and tab boxes
 - Almost any UI element you would ever need (toggles, sliders, dropdowns, etc)
 - Interface automatically becomes scrollable whenever there are too many UI elements
+- MultiLanguge intergration allowing u to add and translate ui elements
 - Dependency boxes, allowing you to easily hide/show UI elements depending on the state of other UI elements
 
 ## Interface Preview
-<img src="https://i.imgur.com/qs0Hqc6.png" />
+-- soon
 
 ## Contributors
-- Inori: Main developer.
+- silence (termed): Snowfall Main Developer
+- SoNotClose: SnowFall Coder
+
+--- LL Devs ----
+- Inori: LL Main developer.
 - Wally: Cleaning up verbose code, extending library functionality.
 - mstudio45: Extending library functionality and adding resizing to the menu.
 - Stefanuk: Extending library functionality.
