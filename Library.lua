@@ -260,6 +260,7 @@ local Library = {
 
     -- gui --
     ActiveTab = nil;
+    ActiveSubTab = nil;
     TotalTabs = 0;
 
     ScreenGui = ScreenGui;
@@ -2174,6 +2175,8 @@ do
             ColorPicker.Vib = V
         end
 
+        function ColorPicker:UpdateSelectedStopColor() end
+
         ColorPicker:SetHSVFromRGB(ColorPicker.Value)
 
         local DisplayFrame = Library:Create("Frame", {
@@ -2680,6 +2683,7 @@ do
                     ColorPicker.Sat = (MouseX - MinX) / (MaxX - MinX)
                     ColorPicker.Vib = 1 - ((MouseY - MinY) / (MaxY - MinY))
                     ColorPicker:Display()
+                    ColorPicker:UpdateSelectedStopColor()
 
                     RunCallback()
 
@@ -2699,6 +2703,7 @@ do
 
                     ColorPicker.Hue = ((MouseY - MinY) / (MaxY - MinY))
                     ColorPicker:Display()
+                    ColorPicker:UpdateSelectedStopColor()
 
                     RunCallback()
 
@@ -2825,14 +2830,24 @@ do
                         SelectedStop = stop
                         ColorPicker:SetHSVFromRGB(stop.Color)
                         ColorPicker:Display()
+                        if not PickerFrameOuter.Visible then
+                            ColorPicker:Show()
+                        end
                         RefreshGradientVisuals()
+                        local moved = false
                         while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                            stop.Time = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
-                            RefreshGradientVisuals()
+                            local newTime = math.clamp((Mouse.X - GradientBarInner.AbsolutePosition.X) / GradientBarInner.AbsoluteSize.X, 0, 1)
+                            if newTime ~= stop.Time then
+                                moved = true
+                                stop.Time = newTime
+                                RefreshGradientVisuals()
+                            end
                             RunService.RenderStepped:Wait()
                         end
-                        RunCallback()
-                        Library:AttemptSave()
+                        if moved then
+                            RunCallback()
+                            Library:AttemptSave()
+                        end
                     elseif Input.UserInputType == Enum.UserInputType.MouseButton2 and #GradientStops > 2 then
                         local idx = table.find(GradientStops, stop)
                         stop.Frame:Destroy()
@@ -2844,6 +2859,7 @@ do
                         ColorPicker:Display()
                         RefreshGradientVisuals()
                         RunCallback()
+                        Library:AttemptSave()
                     end
                 end)
             end
@@ -2890,10 +2906,14 @@ do
                 DisplayFrame.BackgroundColor3 = Color3.new(1, 1, 1)
                 DisplayFrame.BackgroundTransparency = 0
                 DisplayFrame.BorderColor3 = Library.OutlineColor
+                RefreshGradientVisuals()
+            end
+
+            function ColorPicker:UpdateSelectedStopColor()
                 if SelectedStop then
                     SelectedStop.Color = ColorPicker.Value
+                    RefreshGradientVisuals()
                 end
-                RefreshGradientVisuals()
             end
 
             local OriginalSetValue = ColorPicker.SetValue
@@ -6915,6 +6935,82 @@ do
     end
 end
 
+--// Draggable Labels \\--
+-- Recommended alternative to SetWatermark for floating text overlays.
+function Library:AddDraggableLabel(Text)
+    local Outer = Library:Create("Frame", {
+        BorderColor3 = Color3.new(0, 0, 0);
+        Position = UDim2.new(0, 100, 0, 50);
+        Size = UDim2.new(0, 10, 0, 20);
+        ZIndex = 200;
+        Visible = true;
+        Parent = ScreenGui;
+    })
+
+    local Inner = Library:Create("Frame", {
+        BackgroundColor3 = Library.MainColor;
+        BorderColor3 = Library.AccentColor;
+        BorderMode = Enum.BorderMode.Inset;
+        Size = UDim2.new(1, 0, 1, 0);
+        ZIndex = 201;
+        Parent = Outer;
+    })
+
+    Library:AddToRegistry(Inner, {
+        BackgroundColor3 = "MainColor";
+        BorderColor3 = "AccentColor";
+    })
+
+    local InnerFrame = Library:Create("Frame", {
+        BackgroundColor3 = Color3.new(1, 1, 1);
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 1, 0, 1);
+        Size = UDim2.new(1, -2, 1, -2);
+        ZIndex = 202;
+        Parent = Inner;
+    })
+
+    Library:Create("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Library:GetDarkerColor(Library.MainColor)),
+            ColorSequenceKeypoint.new(1, Library.MainColor),
+        });
+        Rotation = -90;
+        Parent = InnerFrame;
+    })
+
+    local Label = Library:CreateLabel({
+        Position = UDim2.new(0, 5, 0, 0);
+        Size = UDim2.new(1, -4, 1, 0);
+        TextSize = 14;
+        TextXAlignment = Enum.TextXAlignment.Left;
+        ZIndex = 203;
+        Parent = InnerFrame;
+    })
+
+    Library:MakeDraggable(Outer)
+
+    local DragLabel = {}
+
+    function DragLabel:SetText(NewText)
+        local X, Y = Library:GetTextBounds(NewText, Library.Font, 14)
+        Outer.Size = UDim2.new(0, X + 15, 0, (Y * 1.5) + 3)
+        Label.Text = NewText
+    end
+
+    function DragLabel:SetVisible(Bool)
+        Outer.Visible = Bool
+    end
+
+    function DragLabel:Destroy()
+        Outer:Destroy()
+    end
+
+    DragLabel:SetText(typeof(Text) == "string" and Text or "")
+
+    return DragLabel
+end
+
 --// Notifications \\--
 do
     Library.LeftNotificationArea = Library:Create("Frame", {
@@ -8523,6 +8619,7 @@ end
 
         function Tab:ShowTab()
             Library.ActiveTab = Name
+            Library.ActiveSubTab = Tab.ActiveSubTabName or nil
             for _, Tab in next, Window.Tabs do
                 Tab:HideTab()
             end
@@ -9099,6 +9196,7 @@ end
 
             function SubTab:ShowTab()
                 Tab.ActiveSubTabName = SubName
+                Library.ActiveSubTab = SubName
                 _deactivateAllSubBtns()
                 SubBtnBlocker.BackgroundTransparency = 0
                 SubBtnHighlight.Visible = true
@@ -9472,12 +9570,20 @@ end
                     workspace.CurrentCamera.ViewportSize.Y / 2
                 )
 
+                local function IsActuallyVisible(obj)
+                    local cur = obj
+                    while cur and cur ~= ScreenGui do
+                        if not cur.Visible then return false end
+                        cur = cur.Parent
+                    end
+                    return true
+                end
+
                 local function GetNavigableElements()
                     local elements = {}
                     for _, btn in ipairs(ScreenGui:GetDescendants()) do
-                        if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible and btn.Active ~= false then
-                            local abs = btn.AbsolutePosition
-                            local sz  = btn.AbsoluteSize
+                        if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and IsActuallyVisible(btn) and btn.Active ~= false then
+                            local sz = btn.AbsoluteSize
                             if sz.X > 4 and sz.Y > 4 then
                                 table.insert(elements, btn)
                             end
@@ -9506,11 +9612,20 @@ end
                     CtrlFocusHighlight = hl
                 end
 
+                local function FireButton(btn)
+                    pcall(function()
+                        btn.InputBegan:Fire({ UserInputType = Enum.UserInputType.MouseButton1, KeyCode = Enum.KeyCode.Unknown })
+                    end)
+                    pcall(function()
+                        btn.MouseButton1Click:Fire()
+                    end)
+                end
+
                 local function CtrlActivateFocused(elements)
                     if CtrlFocusIndex < 1 or CtrlFocusIndex > #elements then return end
                     local el = elements[CtrlFocusIndex]
                     if el and el.Parent then
-                        pcall(function() el:TriggerEvent("MouseButton1Click") end)
+                        FireButton(el)
                     end
                 end
 
@@ -9537,19 +9652,25 @@ end
                         return
                     end
 
-                    local ok, gamepadState = pcall(function()
+                    local ok, rawState = pcall(function()
                         return InputService:GetGamepadState(Enum.UserInputType.Gamepad1)
                     end)
-                    if not ok or not gamepadState then return end
+                    if not ok or not rawState then return end
+
+                    -- GetGamepadState returns an array of InputObjects; build a KeyCode lookup
+                    local stateMap = {}
+                    for _, inputObj in ipairs(rawState) do
+                        stateMap[inputObj.KeyCode] = inputObj
+                    end
 
                     if Library.ControllerNavType == "Joystick" then
-                        local stickState = gamepadState[Enum.KeyCode.Thumbstick1] or gamepadState[Enum.KeyCode.Thumbstick2]
+                        local stickState = stateMap[Enum.KeyCode.Thumbstick1] or stateMap[Enum.KeyCode.Thumbstick2]
                         if stickState then
                             local sens = (typeof(Library.ControllerNavSensitivity) == "number" and Library.ControllerNavSensitivity or 5) * 10
                             local vp = workspace.CurrentCamera.ViewportSize
                             CtrlVirtualCursorPos = Vector2.new(
-                                math.clamp(CtrlVirtualCursorPos.X + stickState.X * sens * delta, 0, vp.X),
-                                math.clamp(CtrlVirtualCursorPos.Y - stickState.Y * sens * delta, 0, vp.Y)
+                                math.clamp(CtrlVirtualCursorPos.X + stickState.Position.X * sens * delta, 0, vp.X),
+                                math.clamp(CtrlVirtualCursorPos.Y - stickState.Position.Y * sens * delta, 0, vp.Y)
                             )
                             if CtrlVirtualCursor and CtrlVirtualCursor.Parent then
                                 CtrlVirtualCursor.Position = UDim2.fromOffset(CtrlVirtualCursorPos.X, CtrlVirtualCursorPos.Y)
@@ -9561,8 +9682,8 @@ end
                     DPadCooldown = DPadCooldown - delta
                     if DPadCooldown > 0 then return end
 
-                    local dpadUp   = gamepadState[Enum.KeyCode.DPadUp]
-                    local dpadDown = gamepadState[Enum.KeyCode.DPadDown]
+                    local dpadUp    = stateMap[Enum.KeyCode.DPadUp]
+                    local dpadDown  = stateMap[Enum.KeyCode.DPadDown]
 
                     local moveDir = 0
                     if dpadUp   and dpadUp.Position.Z == 1   then moveDir = -1
@@ -9592,7 +9713,7 @@ end
                             if ok and objs and typeof(objs) == "table" then
                                 for _, obj in ipairs(objs) do
                                     if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-                                        pcall(function() obj:TriggerEvent("MouseButton1Click") end)
+                                        FireButton(obj)
                                         break
                                     end
                                 end
