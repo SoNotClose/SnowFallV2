@@ -7026,8 +7026,8 @@ do
         end
     end
 
-    function Library:RegisterLabel(key, instance)
-        Library._LabelRegistry[key] = instance
+    function Library:RegisterLabel(key, instance, applyFn)
+        Library._LabelRegistry[key] = { instance = instance, apply = applyFn }
     end
 
     function Library:AddLanguageHook(fn)
@@ -7058,8 +7058,9 @@ do
             for idx, elem in pairs(Library.Toggles) do
                 if not Library._OriginalTexts[idx] then snap(elem, idx) end
             end
-            for key, inst in pairs(Library._LabelRegistry) do
+            for key, entry in pairs(Library._LabelRegistry) do
                 if not Library._OriginalTexts[key] then
+                    local inst = type(entry) == "table" and entry.instance or entry
                     Library._OriginalTexts[key] = { Text = inst and inst.Text }
                 end
             end
@@ -7089,9 +7090,13 @@ do
                 end
             end
 
-            local inst = Library._LabelRegistry[idx]
-            if inst and newText ~= nil then
-                inst.Text = newText
+            local entry = Library._LabelRegistry[idx]
+            if entry and newText ~= nil then
+                if entry.apply then
+                    entry.apply(newText)
+                elseif entry.instance then
+                    entry.instance.Text = newText
+                end
             end
         end
 
@@ -9001,6 +9006,18 @@ end
                 Parent = SubBtnInner;
             })
             SubTab.ButtonLabel = SubBtnLabel
+
+            function SubTab:SetName(Name)
+                if typeof(Name) == "string" then
+                    SubTab.Name = Name
+                    local _w = Library:GetTextBounds(Name, Library.Font, 14)
+                    local w = Library.IgnoreTabSizes
+                        and math.max(_w, Library.TabSize * 16)
+                        or _w
+                    SubBtn.Size = UDim2.new(0, w + 22, 0.9, 0)
+                    SubBtnLabel.Text = Name
+                end
+            end
 
             local SubBtnHighlight = Library:Create("Frame", {
                 BackgroundColor3 = Library.AccentColor;
