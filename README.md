@@ -8,6 +8,9 @@ as a way to easily build your ui find out more below in features
 ###### Example Script: 
 * [Example](Example.lua)
 
+###### Library Documentation: 
+* [Doc](DOCUMENTATION.md)
+
 ###### Interface Addons:
 * [Menu Manager](addons/MenuManager.lua)&nbsp;&nbsp;|&nbsp;&nbsp;[Theme Manager](addons/ThemeManager.lua)&nbsp;&nbsp;|&nbsp;&nbsp;[Save Manager](addons/SaveManager.lua) 
 
