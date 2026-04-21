@@ -1,5 +1,11 @@
 ## 4.20.26
 ```diff
++ Pushed out bug fixes for cusor and notifications in menu manager
++ Pushed out a update for controller nav
+```
+
+## 4.20.26
+```diff
 + Improved Gradient Color Picker
 + Added AddDraggableLabel
 ```
