@@ -9570,6 +9570,20 @@ end
                     local OldMouseIconState = InputService.MouseIconEnabled
                     pcall(function() RunService:UnbindFromRenderStep("LinoriaCursor") end)
                     RunService:BindToRenderStep("LinoriaCursor", Enum.RenderPriority.Camera.Value - 1, function()
+                        if not Toggled or (not ScreenGui or not ScreenGui.Parent) then
+                            InputService.MouseIconEnabled = OldMouseIconState
+                            pcall(function() MouseFill:Remove()   end)
+                            pcall(function() MouseOutline:Remove() end)
+                            pcall(function() DotFill:Remove()     end)
+                            pcall(function() DotOutline:Remove()  end)
+                            for i = 1, 4 do
+                                pcall(function() PlusBars[i]:Remove()    end)
+                                pcall(function() PlusOutlines[i]:Remove() end)
+                            end
+                            RunService:UnbindFromRenderStep("LinoriaCursor")
+                            return
+                        end
+
                         local show = Library.ShowCustomCursor
                         InputService.MouseIconEnabled = not show
 
@@ -9644,13 +9658,6 @@ end
                             end
                         end
 
-                        if not Toggled or (not ScreenGui or not ScreenGui.Parent) then
-                            InputService.MouseIconEnabled = OldMouseIconState
-                            MouseFill:Destroy()  MouseOutline:Destroy()
-                            DotFill:Destroy()    DotOutline:Destroy()
-                            for i = 1, 4 do PlusBars[i]:Destroy() PlusOutlines[i]:Destroy() end
-                            RunService:UnbindFromRenderStep("LinoriaCursor")
-                        end
                     end)
                 end))
             end
