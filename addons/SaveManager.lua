@@ -83,11 +83,31 @@ local SaveManager = {} do
         },
         ColorPicker = {
             Save = function(idx, object)
+                if typeof(object.Value) == "ColorSequence" then
+                    local kps = {}
+                    for _, kp in ipairs(object.Value.Keypoints) do
+                        table.insert(kps, { t = kp.Time, c = kp.Value:ToHex() })
+                    end
+                    return { type = 'ColorPicker', idx = idx, isGradient = true, gradient = kps, transparency = object.Transparency }
+                end
                 return { type = 'ColorPicker', idx = idx, value = object.Value:ToHex(), transparency = object.Transparency }
             end,
             Load = function(idx, data)
                 if SaveManager.Library.Options[idx] then
-                    SaveManager.Library.Options[idx]:SetValueRGB(Color3.fromHex(data.value), data.transparency)
+                    if data.isGradient and typeof(data.gradient) == "table" then
+                        local ok, kps = pcall(function()
+                            local t = {}
+                            for _, kp in ipairs(data.gradient) do
+                                table.insert(t, ColorSequenceKeypoint.new(kp.t, Color3.fromHex(kp.c)))
+                            end
+                            return t
+                        end)
+                        if ok and kps then
+                            SaveManager.Library.Options[idx]:SetValue(ColorSequence.new(kps))
+                        end
+                    else
+                        SaveManager.Library.Options[idx]:SetValueRGB(Color3.fromHex(data.value), data.transparency)
+                    end
                 end
             end,
         },
