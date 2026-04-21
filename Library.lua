@@ -90,12 +90,12 @@ local Tooltips = {}
 local Dialogues = {}
 
 -- https://github.com/deividcomsono/Obsidian/blob/main/Library.lua#L30
-local BaseURL = "https://raw.githubusercontent.com/mstudio45/LinoriaLib/refs/heads/main/"
+local BaseURL = "https://raw.githubusercontent.com/SoNotClose/SnowFallV2/refs/heads/main/"
 local CustomImageManager = {}
 local CustomImageManagerAssets = {
     Cursor = {
         RobloxId = 9619665977,
-        Path = "LinoriaLib/assets/Cursor.png",
+        Path = "SnowFallV2/assets/Cursor.png",
         URL = BaseURL .. "assets/Cursor.png",
 
         Id = nil,
@@ -103,7 +103,7 @@ local CustomImageManagerAssets = {
 
     DropdownArrow = {
         RobloxId = 6282522798,
-        Path = "LinoriaLib/assets/DropdownArrow.png",
+        Path = "SnowFallV2/assets/DropdownArrow.png",
         URL = BaseURL .. "assets/DropdownArrow.png",
 
         Id = nil,
@@ -111,7 +111,7 @@ local CustomImageManagerAssets = {
 
     Checker = {
         RobloxId = 12977615774,
-        Path = "LinoriaLib/assets/Checker.png",
+        Path = "SnowFallV2/assets/Checker.png",
         URL = BaseURL .. "assets/Checker.png",
 
         Id = nil,
@@ -119,7 +119,7 @@ local CustomImageManagerAssets = {
 
     CheckerLong = {
         RobloxId = 12978095818,
-        Path = "LinoriaLib/assets/CheckerLong.png",
+        Path = "SnowFallV2/assets/CheckerLong.png",
         URL = BaseURL .. "assets/CheckerLong.png",
 
         Id = nil,
@@ -127,7 +127,7 @@ local CustomImageManagerAssets = {
 
     SaturationMap = {
         RobloxId = 4155801252,
-        Path = "LinoriaLib/assets/SaturationMap.png",
+        Path = "SnowFallV2/assets/SaturationMap.png",
         URL = BaseURL .. "assets/SaturationMap.png",
 
         Id = nil,
@@ -311,6 +311,19 @@ local Library = {
 
     CustomCursor = false;
     CursorType   = "Mouse";
+    CursorColor  = nil;  -- nil = use AccentColor
+
+    CursorDotScale            = 5;
+    CursorDotOutline          = false;
+    CursorDotOutlineThickness = 1;
+
+    CursorPlusSpacing          = 2;
+    CursorPlusTopBar           = true;
+    CursorPlusRightBar         = true;
+    CursorPlusLeftBar          = true;
+    CursorPlusBottomBar        = true;
+    CursorPlusOutline          = false;
+    CursorPlusOutlineThickness = 1;
 
     Notify = nil;
     NotifySide = "Left";
@@ -7377,40 +7390,43 @@ do
             RichText = true;
             Parent = InnerFrame;
         })
+
+        local _barSide    = string.lower(Library.NotificationBarSide or "left")
+        local _forceColor = Library.NotificationForceColor
+        local _accentCol  = _forceColor and Library.NotificationAccentColor or Library.AccentColor
+        local _outlineCol = _forceColor and Library.NotificationOutlineColor or Library.OutlineColor
+
         if _forceColor then
             NotifyLabel.TextColor3 = Library.NotificationFontColor
         end
-
-        local _barSide = string.lower(Library.NotificationBarSide or "left")
-        local _forceColor = Library.NotificationForceColor
-        local _accentCol = _forceColor and Library.NotificationAccentColor or Library.AccentColor
-        local _outlineCol = _forceColor and Library.NotificationOutlineColor or Library.OutlineColor
 
         if _forceColor then
             NotifyInner.BorderColor3 = _outlineCol
         end
 
         if Side ~= "middle" then
+            -- SideColor must be parented to NotifyInner (not NotifyOuter) because
+            -- NotifyOuter has ClipsDescendants=true which would clip bars positioned outside.
             local barProps
             if _barSide == "top" then
                 barProps = {
-                    AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, -1, 0, -1);
-                    Size = UDim2.new(1, 2, 0, 3);
+                    AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, 0, 0, 0);
+                    Size = UDim2.new(1, 0, 0, 3);
                 }
             elseif _barSide == "bottom" then
                 barProps = {
-                    AnchorPoint = Vector2.new(0, 1); Position = UDim2.new(0, -1, 1, 1);
-                    Size = UDim2.new(1, 2, 0, 3);
+                    AnchorPoint = Vector2.new(0, 1); Position = UDim2.new(0, 0, 1, 0);
+                    Size = UDim2.new(1, 0, 0, 3);
                 }
             elseif _barSide == "right" then
                 barProps = {
-                    AnchorPoint = Vector2.new(1, 0); Position = UDim2.new(1, 1, 0, -1);
-                    Size = UDim2.new(0, 3, 1, 2);
+                    AnchorPoint = Vector2.new(1, 0); Position = UDim2.new(1, 0, 0, 0);
+                    Size = UDim2.new(0, 3, 1, 0);
                 }
             else
                 barProps = {
-                    AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, -1, 0, -1);
-                    Size = UDim2.new(0, 3, 1, 2);
+                    AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, 0, 0, 0);
+                    Size = UDim2.new(0, 3, 1, 0);
                 }
             end
             local SideColor = Library:Create("Frame", {
@@ -7420,7 +7436,7 @@ do
                 BorderSizePixel = 0;
                 Size = barProps.Size;
                 ZIndex = 11004;
-                Parent = NotifyOuter;
+                Parent = NotifyInner;
             })
             if not _forceColor then
                 Library:AddToRegistry(SideColor, { BackgroundColor3 = "AccentColor"; }, true)
@@ -9522,37 +9538,117 @@ end
 
             if DrawingLib.drawing_replaced ~= true and IsBadDrawingLib ~= true then
                 IsBadDrawingLib = not (pcall(function()
-                    local Cursor = DrawingLib.new("Triangle")
-                    Cursor.Thickness = 1
-                    Cursor.Filled = true
-                    Cursor.Visible = Library.ShowCustomCursor
+                    -- Mouse type
+                    local MouseFill    = DrawingLib.new("Triangle")
+                    MouseFill.Thickness = 1
+                    MouseFill.Filled    = true
+                    local MouseOutline  = DrawingLib.new("Triangle")
+                    MouseOutline.Thickness = 1
+                    MouseOutline.Filled   = false
+                    MouseOutline.Color    = Color3.new(0, 0, 0)
 
-                    local CursorOutline = DrawingLib.new("Triangle")
-                    CursorOutline.Thickness = 1
-                    CursorOutline.Filled = false
-                    CursorOutline.Color = Color3.new(0, 0, 0)
-                    CursorOutline.Visible = Library.ShowCustomCursor
-                    
+                    -- Dot type
+                    local DotFill    = DrawingLib.new("Circle")
+                    DotFill.Filled   = true
+                    DotFill.NumSides = 64
+                    local DotOutline   = DrawingLib.new("Circle")
+                    DotOutline.Filled   = false
+                    DotOutline.NumSides = 64
+
+                    -- Plus type: 4 bars + 4 outlines (indices: 1=Top 2=Right 3=Bottom 4=Left)
+                    local PlusBars    = {}
+                    local PlusOutlines = {}
+                    for i = 1, 4 do
+                        local b = DrawingLib.new("Line")
+                        b.Thickness  = 2
+                        PlusBars[i]  = b
+                        local o = DrawingLib.new("Line")
+                        o.Color     = Color3.new(0, 0, 0)
+                        PlusOutlines[i] = o
+                    end
+
                     local OldMouseIconState = InputService.MouseIconEnabled
                     pcall(function() RunService:UnbindFromRenderStep("LinoriaCursor") end)
                     RunService:BindToRenderStep("LinoriaCursor", Enum.RenderPriority.Camera.Value - 1, function()
-                        InputService.MouseIconEnabled = not Library.ShowCustomCursor
+                        local show = Library.ShowCustomCursor
+                        InputService.MouseIconEnabled = not show
+
                         local mPos = InputService:GetMouseLocation()
                         local X, Y = mPos.X, mPos.Y
-                        Cursor.Color = Library.AccentColor
-                        Cursor.PointA = Vector2.new(X, Y)
-                        Cursor.PointB = Vector2.new(X + 16, Y + 6)
-                        Cursor.PointC = Vector2.new(X + 6, Y + 16)
-                        Cursor.Visible = Library.ShowCustomCursor
-                        CursorOutline.PointA = Cursor.PointA
-                        CursorOutline.PointB = Cursor.PointB
-                        CursorOutline.PointC = Cursor.PointC
-                        CursorOutline.Visible = Library.ShowCustomCursor
+                        local col  = Library.CursorColor or Library.AccentColor
+                        local ctype = Library.CursorType or "Mouse"
+
+                        -- hide everything first
+                        MouseFill.Visible  = false
+                        MouseOutline.Visible = false
+                        DotFill.Visible    = false
+                        DotOutline.Visible = false
+                        for i = 1, 4 do
+                            PlusBars[i].Visible    = false
+                            PlusOutlines[i].Visible = false
+                        end
+
+                        if show then
+                            if ctype == "Dot" then
+                                local r = math.max(1, Library.CursorDotScale or 5)
+                                DotFill.Position  = Vector2.new(X, Y)
+                                DotFill.Radius    = r
+                                DotFill.Color     = col
+                                DotFill.Visible   = true
+                                if Library.CursorDotOutline then
+                                    local t = math.max(0.1, Library.CursorDotOutlineThickness or 1)
+                                    DotOutline.Position  = Vector2.new(X, Y)
+                                    DotOutline.Radius    = r + t
+                                    DotOutline.Thickness = t
+                                    DotOutline.Visible   = true
+                                end
+
+                            elseif ctype == "Plus" then
+                                local sp  = Library.CursorPlusSpacing or 2
+                                local len = 7
+                                local t2  = 2
+                                local ot  = math.max(0.1, Library.CursorPlusOutlineThickness or 1)
+                                -- dirs: 1=Top, 2=Right, 3=Bottom, 4=Left
+                                local dirs = {
+                                    { Vector2.new(X, Y - sp), Vector2.new(X, Y - sp - len), Library.CursorPlusTopBar },
+                                    { Vector2.new(X + sp, Y), Vector2.new(X + sp + len, Y), Library.CursorPlusRightBar },
+                                    { Vector2.new(X, Y + sp), Vector2.new(X, Y + sp + len), Library.CursorPlusBottomBar },
+                                    { Vector2.new(X - sp, Y), Vector2.new(X - sp - len, Y), Library.CursorPlusLeftBar },
+                                }
+                                for i, d in ipairs(dirs) do
+                                    if d[3] ~= false then
+                                        if Library.CursorPlusOutline then
+                                            PlusOutlines[i].From      = d[1]
+                                            PlusOutlines[i].To        = d[2]
+                                            PlusOutlines[i].Thickness = t2 + ot * 2
+                                            PlusOutlines[i].Visible   = true
+                                        end
+                                        PlusBars[i].From      = d[1]
+                                        PlusBars[i].To        = d[2]
+                                        PlusBars[i].Thickness = t2
+                                        PlusBars[i].Color     = col
+                                        PlusBars[i].Visible   = true
+                                    end
+                                end
+
+                            else -- "Mouse"
+                                MouseFill.Color  = col
+                                MouseFill.PointA = Vector2.new(X, Y)
+                                MouseFill.PointB = Vector2.new(X + 16, Y + 6)
+                                MouseFill.PointC = Vector2.new(X + 6, Y + 16)
+                                MouseFill.Visible = true
+                                MouseOutline.PointA = MouseFill.PointA
+                                MouseOutline.PointB = MouseFill.PointB
+                                MouseOutline.PointC = MouseFill.PointC
+                                MouseOutline.Visible = true
+                            end
+                        end
 
                         if not Toggled or (not ScreenGui or not ScreenGui.Parent) then
                             InputService.MouseIconEnabled = OldMouseIconState
-                            if Cursor then Cursor:Destroy() end
-                            if CursorOutline then CursorOutline:Destroy() end
+                            MouseFill:Destroy()  MouseOutline:Destroy()
+                            DotFill:Destroy()    DotOutline:Destroy()
+                            for i = 1, 4 do PlusBars[i]:Destroy() PlusOutlines[i]:Destroy() end
                             RunService:UnbindFromRenderStep("LinoriaCursor")
                         end
                     end)
@@ -9630,17 +9726,15 @@ end
                 end
 
                 if Library.ControllerNavType == "Joystick" then
-                    CtrlVirtualCursor = Instance.new("Frame")
-                    CtrlVirtualCursor.Size = UDim2.fromOffset(12, 12)
-                    CtrlVirtualCursor.AnchorPoint = Vector2.new(0.5, 0.5)
-                    CtrlVirtualCursor.BackgroundColor3 = Library.AccentColor
-                    CtrlVirtualCursor.BorderSizePixel = 0
-                    CtrlVirtualCursor.ZIndex = 99999
-                    CtrlVirtualCursor.Position = UDim2.fromOffset(CtrlVirtualCursorPos.X, CtrlVirtualCursorPos.Y)
-                    local corner = Instance.new("UICorner")
-                    corner.CornerRadius = UDim.new(1, 0)
-                    corner.Parent = CtrlVirtualCursor
-                    CtrlVirtualCursor.Parent = ScreenGui
+                    pcall(function()
+                        CtrlVirtualCursor = DrawingLib.new("Circle")
+                        CtrlVirtualCursor.Radius   = 6
+                        CtrlVirtualCursor.Filled   = true
+                        CtrlVirtualCursor.NumSides  = 32
+                        CtrlVirtualCursor.Color    = Library.CursorColor or Library.AccentColor
+                        CtrlVirtualCursor.Position = CtrlVirtualCursorPos
+                        CtrlVirtualCursor.Visible  = true
+                    end)
                 end
 
                 local DPadCooldown = 0
@@ -9648,7 +9742,7 @@ end
                     if not Toggled or not ScreenGui or not ScreenGui.Parent then
                         pcall(function() RunService:UnbindFromRenderStep("LinoriaControllerNav") end)
                         SetCtrlHighlight(nil)
-                        if CtrlVirtualCursor then pcall(function() CtrlVirtualCursor:Destroy() end) CtrlVirtualCursor = nil end
+                        if CtrlVirtualCursor then pcall(function() CtrlVirtualCursor:Remove() end) CtrlVirtualCursor = nil end
                         return
                     end
 
@@ -9672,8 +9766,11 @@ end
                                 math.clamp(CtrlVirtualCursorPos.X + stickState.Position.X * sens * delta, 0, vp.X),
                                 math.clamp(CtrlVirtualCursorPos.Y - stickState.Position.Y * sens * delta, 0, vp.Y)
                             )
-                            if CtrlVirtualCursor and CtrlVirtualCursor.Parent then
-                                CtrlVirtualCursor.Position = UDim2.fromOffset(CtrlVirtualCursorPos.X, CtrlVirtualCursorPos.Y)
+                            if CtrlVirtualCursor then
+                                pcall(function()
+                                    CtrlVirtualCursor.Position = CtrlVirtualCursorPos
+                                    CtrlVirtualCursor.Color = Library.CursorColor or Library.AccentColor
+                                end)
                             end
                         end
                         return
