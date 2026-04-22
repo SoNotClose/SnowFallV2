@@ -289,7 +289,8 @@ local Library = {
     WindowX = 0;
     WindowY = 0;
 
-    IgnoreTabSizes = false;
+    IgnoreTabSizes    = false;
+    IgnoreSubTabSizes = false;
     IgnoreLimit = 6;
     TabSize = 5;
 
@@ -560,8 +561,12 @@ function Library:_ApplyTabIcon(textLabel, parentFrame, iconName, side, iconColor
         Library:AddToRegistry(il, { ImageColor3 = "IconColor" })
     end
 
-    -- Reposition icon and shrink / shift the text label.
-    -- Clamp offsets to >= 0 so a very narrow button never gets a negative Size.
+    -- Reposition icon and adjust the text label as needed.
+    -- For "Left": the parent was pre-widened by _iconExtra; just shift the label right.
+    --   Do NOT change the size — the original offset already describes the correct right-margin.
+    -- For "Right": anchor icon to the far right; shrink label by the icon+gap so text
+    --   never runs under the icon. Negative offsets are valid Roblox UDim2 values.
+    -- For "Middle": shift label right by half the icon+gap; shrink similarly.
     local lp = textLabel.Position
     local ls = textLabel.Size
 
@@ -569,39 +574,36 @@ function Library:_ApplyTabIcon(textLabel, parentFrame, iconName, side, iconColor
         il.AnchorPoint     = Vector2.new(0, 0.5)
         il.Position        = UDim2.new(lp.X.Scale, lp.X.Offset, 0.5, 0)
         textLabel.Position = UDim2.new(lp.X.Scale, lp.X.Offset + _ICON_SZ + _ICON_GAP, lp.Y.Scale, lp.Y.Offset)
-        textLabel.Size     = UDim2.new(ls.X.Scale, math.max(0, ls.X.Offset - _ICON_SZ - _ICON_GAP), ls.Y.Scale, ls.Y.Offset)
+        -- size intentionally unchanged: parent is wider by _iconExtra so the rendered
+        -- width stays the same once the label is shifted right.
 
     elseif side == "Right" then
         il.AnchorPoint = Vector2.new(1, 0.5)
-        il.Position    = UDim2.new(1, -(lp.X.Offset), 0.5, 0)
-        textLabel.Size = UDim2.new(ls.X.Scale, math.max(0, ls.X.Offset - _ICON_SZ - _ICON_GAP), ls.Y.Scale, ls.Y.Offset)
+        il.Position    = UDim2.new(1, 0, 0.5, 0)  -- flush to right edge of parent
+        -- shrink label so its right edge leaves room for the icon; negative offset is fine.
+        textLabel.Size = UDim2.new(ls.X.Scale, ls.X.Offset - _ICON_SZ - _ICON_GAP, ls.Y.Scale, ls.Y.Offset)
 
-    else -- "Middle": icon sits just left of the centered text
+    else -- "Middle": icon sits just left of the centred text
         local halfExtra = math.floor((_ICON_SZ + _ICON_GAP) / 2)
         il.AnchorPoint     = Vector2.new(0.5, 0.5)
         il.Position        = UDim2.new(0.5, -halfExtra - math.floor(ls.X.Offset / 2), 0.5, 0)
         textLabel.Position = UDim2.new(lp.X.Scale, lp.X.Offset + halfExtra, lp.Y.Scale, lp.Y.Offset)
-        textLabel.Size     = UDim2.new(ls.X.Scale, math.max(0, ls.X.Offset - halfExtra), ls.Y.Scale, ls.Y.Offset)
+        textLabel.Size     = UDim2.new(ls.X.Scale, ls.X.Offset - halfExtra, ls.Y.Scale, ls.Y.Offset)
     end
 
     return il
 end
 
--- Plays the currently configured tab-switch-in animation on a frame.
--- Call immediately after setting frame.Visible = true.
 function Library:_PlayTabAnimation(frame)
-    -- Guard: frame must exist and be parented before we animate it
     if not (frame and frame.Parent) then return end
 
     local anim = Library.TabSwitchAnimation
     local t    = typeof(Library.TabSwitchAnimationTime) == "number" and Library.TabSwitchAnimationTime or 0.18
     if anim == "None" or not anim then return end
 
-    -- Clamp duration to sane range so bad values don't break tweens
     t = math.clamp(t, 0.01, 2)
 
     if anim == "Fade" then
-        -- Overlay wipe: solid cover tweens to transparent, revealing content
         local parent = frame.Parent
         if not parent then return end
         local ov
@@ -7621,14 +7623,15 @@ do
             end
         end
 
-        local _animatedBar = (Library.NotificationAnimatedBar ~= false) and (_barSide == "top" or _barSide == "bottom" or Side == "middle")
+        local _barValidPos = (_barSide == "top" or _barSide == "bottom" or Side == "middle")
+        local _animatedBar = (Library.NotificationAnimatedBar ~= false) and _barValidPos
         local ProgressBar = Library:Create("Frame", {
             BackgroundColor3 = _accentCol;
             BorderSizePixel = 0;
             Position = UDim2.new(0, 0, 1, -2);
             Size = UDim2.new(1, 0, 0, 2);
             ZIndex = 11005;
-            Visible = _animatedBar;
+            Visible = _barValidPos;  -- always show for valid positions; animation is separate
             Parent = InnerFrame;
         })
         if not _forceColor then
@@ -8990,11 +8993,19 @@ end
 
             if Tab.HasDirectElements and Tab.SubTabs then
                 if Tab.ActiveSubTabName then
-                    LeftSide.Visible = false
-                    RightSide.Visible = false
-                    if Tab._SubTabContent then Tab._SubTabContent.Visible = true end
                     local activeSt = Tab.SubTabs[Tab.ActiveSubTabName]
-                    if activeSt then activeSt._frame.Visible = true end
+                    if activeSt then
+                        -- Restore the full sub-tab state (frame + button highlight/blocker)
+                        -- without playing a second animation on top of the main-tab animation.
+                        local _prevAnim = Library.TabSwitchAnimation
+                        Library.TabSwitchAnimation = "None"
+                        activeSt:ShowTab()
+                        Library.TabSwitchAnimation = _prevAnim
+                    else
+                        LeftSide.Visible = true
+                        RightSide.Visible = true
+                        if Tab._SubTabContent then Tab._SubTabContent.Visible = false end
+                    end
                 else
                     LeftSide.Visible = true
                     RightSide.Visible = true
@@ -9031,7 +9042,7 @@ end
                     and math.max(_w, Library.TabSize * 16)
                     or _w
 
-                TabButton.Size = UDim2.new(0, TabButtonWidth + 8 + 4, 0.85, 0)
+                TabButton.Size = UDim2.new(0, TabButtonWidth + 8 + 4 + _iconExtra, 0.85, 0)
                 TabButtonLabel.Text = Tab.Name
             end
         end
@@ -9443,7 +9454,7 @@ end
 
             local _subIconExtra = (typeof(IconName) == "string" and IconName ~= "") and (_ICON_SZ + _ICON_GAP) or 0
             local _subBtnTextW = Library:GetTextBounds(SubName, Library.Font, 14)
-            local subBtnW = Library.IgnoreTabSizes
+            local subBtnW = Library.IgnoreSubTabSizes
                 and math.max(_subBtnTextW, Library.TabSize * 16)
                 or _subBtnTextW
             subBtnW = subBtnW + 22 + _subIconExtra
@@ -9488,7 +9499,7 @@ end
                 if typeof(Name) == "string" then
                     SubTab.Name = Name
                     local _w = Library:GetTextBounds(Name, Library.Font, 14)
-                    local w = Library.IgnoreTabSizes
+                    local w = Library.IgnoreSubTabSizes
                         and math.max(_w, Library.TabSize * 16)
                         or _w
                     SubBtn.Size = UDim2.new(0, w + 22 + _subIconExtra, 0.9, 0)
@@ -9975,17 +9986,27 @@ end
 
                     pcall(function() RunService:UnbindFromRenderStep("LinoriaCursor") end)
                     RunService:BindToRenderStep("LinoriaCursor", Enum.RenderPriority.Camera.Value - 1, function()
-                        if not Toggled or (not ScreenGui or not ScreenGui.Parent) then
-                            InputService.MouseIconEnabled = OldMouseIconState
-                            pcall(function() MouseFill:Remove()   end)
-                            pcall(function() MouseOutline:Remove() end)
-                            pcall(function() DotFill:Remove()     end)
-                            pcall(function() DotOutline:Remove()  end)
-                            for i = 1, 4 do
-                                pcall(function() PlusBars[i]:Remove()    end)
-                                pcall(function() PlusOutlines[i]:Remove() end)
-                            end
+                        -- ScreenGui destroyed → library was unloaded; fully clean up and stop.
+                        if not (ScreenGui and ScreenGui.Parent) then
+                            pcall(function() InputService.MouseIconEnabled = OldMouseIconState end)
                             RunService:UnbindFromRenderStep("LinoriaCursor")
+                            return
+                        end
+                        -- Menu closed → hide everything and restore the system cursor.
+                        -- Do NOT Remove the Drawing objects; CursorCreated=true would prevent
+                        -- re-creation on the next open, leaving the user with no cursor.
+                        if not Toggled then
+                            pcall(function() InputService.MouseIconEnabled = OldMouseIconState end)
+                            pcall(function()
+                                MouseFill.Visible    = false
+                                MouseOutline.Visible = false
+                                DotFill.Visible      = false
+                                DotOutline.Visible   = false
+                                for i = 1, 4 do
+                                    PlusBars[i].Visible    = false
+                                    PlusOutlines[i].Visible = false
+                                end
+                            end)
                             return
                         end
 
@@ -10256,13 +10277,17 @@ end
                         CtrlCursorRef.Visible   = true
                     end)
 
-                    -- Register cleanup so Library:Unload removes this Drawing object
-                    table.insert(Library._DrawingCleanup, function()
-                        if CtrlCursorRef then
-                            pcall(function() CtrlCursorRef:Remove() end)
-                            CtrlCursorRef = nil
-                        end
-                    end)
+                    -- Register cleanup once; the closure always references the current
+                    -- CtrlCursorRef, so re-registering on every open would leak entries.
+                    if not Library._CtrlCleanupRegistered then
+                        Library._CtrlCleanupRegistered = true
+                        table.insert(Library._DrawingCleanup, function()
+                            if CtrlCursorRef then
+                                pcall(function() CtrlCursorRef:Remove() end)
+                                CtrlCursorRef = nil
+                            end
+                        end)
+                    end
                 end
 
                 -- ── RenderStep: continuous DPad / stick navigation ───────────────
