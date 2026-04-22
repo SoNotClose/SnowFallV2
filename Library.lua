@@ -296,6 +296,15 @@ local Library = {
     ControllerNavType = "Dpad";
     ControllerNavSensitivity = 5;
 
+    -- icons --
+    IconColor = Color3.fromRGB(255, 255, 255); -- default icon tint (nil = follow FontColor)
+    IconSide  = "Left";                        -- global default: "Left" | "Right" | "Middle"
+
+    -- tab switch animations --
+    -- Options: "None","Fade","SlideUp","SlideDown","SlideLeft","SlideRight","Scale","Bounce","Elastic"
+    TabSwitchAnimation     = "None";
+    TabSwitchAnimationTime = 0.18;
+
     LimitNotifications = false;
     MaximumNotifications = 5;
 
@@ -334,6 +343,9 @@ local Library = {
     -- addons --
     SaveManager = nil;
     ThemeManager = nil;
+
+    -- internal cleanup list for Drawing objects (populated by CreateWindow)
+    _DrawingCleanup = {};
 
     -- for better usage --
     Toggles = Toggles;
@@ -510,6 +522,158 @@ end
 function Library:SetIconModule(module: IconModule)
     FetchIcons = true
     Icons = module
+end
+
+-- Attaches a lucide/custom icon next to a TextLabel inside a button frame.
+-- Returns the created ImageLabel, or nil if the icon was not found.
+-- side: "Left" | "Right" | "Middle"  (falls back to Library.IconSide)
+local _ICON_SZ  = 14  -- icon pixel size
+local _ICON_GAP = 4   -- gap between icon and text
+
+function Library:_ApplyTabIcon(textLabel, parentFrame, iconName, side, iconColor, zIndex)
+    if not (textLabel and parentFrame) then return nil end
+    if not (typeof(iconName) == "string" and iconName ~= "") then return nil end
+
+    local icon = Library:GetCustomIcon(iconName)
+    if not icon then return nil end
+
+    side   = side   or Library.IconSide or "Left"
+    zIndex = zIndex or (pcall(function() return textLabel.ZIndex end) and textLabel.ZIndex or 1)
+
+    local il
+    local ok = pcall(function()
+        il = Library:Create("ImageLabel", {
+            BackgroundTransparency = 1;
+            Image                  = icon.Url or "";
+            ImageRectOffset        = icon.ImageRectOffset or Vector2.zero;
+            ImageRectSize          = icon.ImageRectSize  or Vector2.zero;
+            ImageColor3            = iconColor or Library.IconColor;
+            Size                   = UDim2.fromOffset(_ICON_SZ, _ICON_SZ);
+            AnchorPoint            = Vector2.new(0, 0.5);
+            ZIndex                 = zIndex;
+            Parent                 = parentFrame;
+        })
+    end)
+    if not ok or not il then return nil end
+
+    if not iconColor then
+        Library:AddToRegistry(il, { ImageColor3 = "IconColor" })
+    end
+
+    -- Reposition icon and shrink / shift the text label.
+    -- Clamp offsets to >= 0 so a very narrow button never gets a negative Size.
+    local lp = textLabel.Position
+    local ls = textLabel.Size
+
+    if side == "Left" then
+        il.AnchorPoint     = Vector2.new(0, 0.5)
+        il.Position        = UDim2.new(lp.X.Scale, lp.X.Offset, 0.5, 0)
+        textLabel.Position = UDim2.new(lp.X.Scale, lp.X.Offset + _ICON_SZ + _ICON_GAP, lp.Y.Scale, lp.Y.Offset)
+        textLabel.Size     = UDim2.new(ls.X.Scale, math.max(0, ls.X.Offset - _ICON_SZ - _ICON_GAP), ls.Y.Scale, ls.Y.Offset)
+
+    elseif side == "Right" then
+        il.AnchorPoint = Vector2.new(1, 0.5)
+        il.Position    = UDim2.new(1, -(lp.X.Offset), 0.5, 0)
+        textLabel.Size = UDim2.new(ls.X.Scale, math.max(0, ls.X.Offset - _ICON_SZ - _ICON_GAP), ls.Y.Scale, ls.Y.Offset)
+
+    else -- "Middle": icon sits just left of the centered text
+        local halfExtra = math.floor((_ICON_SZ + _ICON_GAP) / 2)
+        il.AnchorPoint     = Vector2.new(0.5, 0.5)
+        il.Position        = UDim2.new(0.5, -halfExtra - math.floor(ls.X.Offset / 2), 0.5, 0)
+        textLabel.Position = UDim2.new(lp.X.Scale, lp.X.Offset + halfExtra, lp.Y.Scale, lp.Y.Offset)
+        textLabel.Size     = UDim2.new(ls.X.Scale, math.max(0, ls.X.Offset - halfExtra), ls.Y.Scale, ls.Y.Offset)
+    end
+
+    return il
+end
+
+-- Plays the currently configured tab-switch-in animation on a frame.
+-- Call immediately after setting frame.Visible = true.
+function Library:_PlayTabAnimation(frame)
+    -- Guard: frame must exist and be parented before we animate it
+    if not (frame and frame.Parent) then return end
+
+    local anim = Library.TabSwitchAnimation
+    local t    = typeof(Library.TabSwitchAnimationTime) == "number" and Library.TabSwitchAnimationTime or 0.18
+    if anim == "None" or not anim then return end
+
+    -- Clamp duration to sane range so bad values don't break tweens
+    t = math.clamp(t, 0.01, 2)
+
+    if anim == "Fade" then
+        -- Overlay wipe: solid cover tweens to transparent, revealing content
+        local parent = frame.Parent
+        if not parent then return end
+        local ov
+        local ok = pcall(function()
+            ov = Instance.new("Frame")
+            ov.BackgroundColor3     = Library.MainColor
+            ov.BorderSizePixel      = 0
+            ov.Size                 = UDim2.fromScale(1, 1)
+            ov.ZIndex               = frame.ZIndex + 200
+            ov.BackgroundTransparency = 0
+            ov.Parent               = parent
+        end)
+        if ok and ov then
+            pcall(function()
+                TweenService:Create(ov, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { BackgroundTransparency = 1 }):Play()
+            end)
+            task.delay(t + 0.1, function() pcall(function() ov:Destroy() end) end)
+        end
+
+    elseif anim == "SlideUp" or anim == "Bounce" or anim == "Elastic" then
+        local style = (anim == "Bounce"  and Enum.EasingStyle.Bounce)
+                   or (anim == "Elastic" and Enum.EasingStyle.Elastic)
+                   or Enum.EasingStyle.Quad
+        pcall(function()
+            local orig = frame.Position
+            frame.Position = UDim2.new(orig.X.Scale, orig.X.Offset, orig.Y.Scale + 0.07, orig.Y.Offset)
+            TweenService:Create(frame, TweenInfo.new(t, style, Enum.EasingDirection.Out),
+                { Position = orig }):Play()
+        end)
+
+    elseif anim == "SlideDown" then
+        pcall(function()
+            local orig = frame.Position
+            frame.Position = UDim2.new(orig.X.Scale, orig.X.Offset, orig.Y.Scale - 0.07, orig.Y.Offset)
+            TweenService:Create(frame, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                { Position = orig }):Play()
+        end)
+
+    elseif anim == "SlideLeft" then
+        pcall(function()
+            local orig = frame.Position
+            frame.Position = UDim2.new(orig.X.Scale + 0.07, orig.X.Offset, orig.Y.Scale, orig.Y.Offset)
+            TweenService:Create(frame, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                { Position = orig }):Play()
+        end)
+
+    elseif anim == "SlideRight" then
+        pcall(function()
+            local orig = frame.Position
+            frame.Position = UDim2.new(orig.X.Scale - 0.07, orig.X.Offset, orig.Y.Scale, orig.Y.Offset)
+            TweenService:Create(frame, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                { Position = orig }):Play()
+        end)
+
+    elseif anim == "Scale" then
+        local sc
+        local ok = pcall(function()
+            sc = Instance.new("UIScale")
+            sc.Scale  = 0.92
+            sc.Parent = frame
+        end)
+        if ok and sc then
+            pcall(function()
+                TweenService:Create(sc, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { Scale = 1 }):Play()
+            end)
+            task.delay(t + 0.1, function()
+                pcall(function() if sc.Parent then sc:Destroy() end end)
+            end)
+        end
+    end
 end
 
 function Library:GetBetterColor(Color: Color3, Add: number): Color3
@@ -1217,11 +1381,26 @@ function Library:GiveSignal(Connection: RBXScriptConnection | RBXScriptSignal) -
 end
 
 function Library:Unload()
+    Library.Unloaded = true  -- set early so in-flight callbacks bail out quickly
+
     for Idx = #Library.Signals, 1, -1 do
         local Connection = table.remove(Library.Signals, Idx)
         if Connection and Connection.Connected then
-            Connection:Disconnect()
+            pcall(function() Connection:Disconnect() end)
         end
+    end
+
+    -- Named RenderStep bindings created by CreateWindow
+    for _, stepName in ipairs({ "LinoriaCursor", "LinoriaControllerNav" }) do
+        pcall(function() RunService:UnbindFromRenderStep(stepName) end)
+    end
+
+    -- Persistent Drawing objects (cursor, controller cursor)
+    if Library._DrawingCleanup then
+        for _, fn in ipairs(Library._DrawingCleanup) do
+            pcall(fn)
+        end
+        Library._DrawingCleanup = {}
     end
 
     for _, UnloadCallback in Library.UnloadSignals do
@@ -1232,8 +1411,7 @@ function Library:Unload()
         Library:SafeCallback(Tooltip.Destroy, Tooltip)
     end
 
-    Library.Unloaded = true
-    ScreenGui:Destroy()
+    pcall(function() ScreenGui:Destroy() end)
 
     getgenv().Linoria = nil
 end
@@ -7547,6 +7725,152 @@ do
     end
 end
 
+--[=[
+════════════════════════════════════════════════════════════════════════════════
+  ICON SUPPORT
+════════════════════════════════════════════════════════════════════════════════
+  Icons use the lucide-roblox icon set loaded via Library:GetIcon / GetCustomIcon.
+  A custom rbxasset/rbxthumb URL is also accepted anywhere an icon name is used.
+
+  Library Properties
+  ──────────────────
+  Library.IconColor  : Color3   — global tint applied to all icons (default white)
+                                  Automatically synced through the Registry system
+                                  so theme changes update all existing icons.
+  Library.IconSide   : string   — global placement: "Left" | "Right" | "Middle"
+                                  "Left"   = icon then text
+                                  "Right"  = text then icon
+                                  "Middle" = icon left of centred text
+
+  Per-call overrides (always optional)
+  ─────────────────────────────────────
+  All AddTab / AddGroupbox calls accept an icon name and an options table:
+
+    Window:AddTab(Name [, IconName [, { IconSide=..., IconColor=... }]])
+    Tab:AddTab(SubName [, IconName [, { IconSide=..., IconColor=... }]])
+    Tabbox:AddTab(Name [, IconName [, { IconSide=..., IconColor=... }]])
+
+    Tab:AddLeftGroupbox(Name [, IconName [, { IconSide=..., IconColor=... }]])
+    Tab:AddRightGroupbox(Name [, IconName [, { IconSide=..., IconColor=... }]])
+    SubTab:AddLeftGroupbox(Name [, IconName [, { IconSide=..., IconColor=... }]])
+    SubTab:AddRightGroupbox(Name [, IconName [, { IconSide=..., IconColor=... }]])
+
+    Tab:AddGroupbox({
+        Name      = "My Box",
+        Side      = 1,               -- 1 = Left, 2 = Right
+        Icon      = "star",          -- lucide name or rbxasset URL
+        IconSide  = "Left",          -- optional override
+        IconColor = Color3.new(1,1,0), -- optional override
+    })
+
+  Safety
+  ──────
+  _ApplyTabIcon is fully nil-guarded. If the icon name is invalid, the icon
+  module is absent, or the ImageLabel cannot be created, the call silently
+  returns nil and leaves the label untouched. Button widths are clamped so
+  the label pixel size never goes negative.
+
+════════════════════════════════════════════════════════════════════════════════
+  TAB SWITCH ANIMATIONS
+════════════════════════════════════════════════════════════════════════════════
+  Library.TabSwitchAnimation     : string  (default "None")
+  Library.TabSwitchAnimationTime : number  (default 0.18 seconds, clamped 0.01–2)
+
+  Available animations:
+    "None"       — instant, no animation
+    "Fade"       — solid-colour overlay wipes off, revealing the new tab
+    "SlideUp"    — tab frame rises up from slightly below (most popular)
+    "SlideDown"  — tab frame drops in from slightly above
+    "SlideLeft"  — tab frame sweeps in from the right
+    "SlideRight" — tab frame sweeps in from the left
+    "Scale"      — tab frame scales up from ~92 % to 100 % via UIScale tween
+    "Bounce"     — SlideUp with Bounce easing   (bouncy overshoot)
+    "Elastic"    — Scale  with Elastic easing   (springy overshoot)
+
+  Example:
+    Library.TabSwitchAnimation     = "SlideUp"
+    Library.TabSwitchAnimationTime = 0.2
+
+  Safety
+  ──────
+  _PlayTabAnimation checks that the target frame exists and has a parent before
+  doing any work. All tween and Instance creation calls are wrapped in pcall so
+  a bad state (e.g. frame destroyed mid-animation) is silently absorbed.
+
+════════════════════════════════════════════════════════════════════════════════
+  CONTROLLER SUPPORT
+════════════════════════════════════════════════════════════════════════════════
+  Enable with:  Library.ControllerSupport = true
+  The controller RenderStep and virtual cursor are only active while this is true.
+
+  DPad mode (Library.ControllerNavType = "Dpad")  ← default
+  ─────────────────────────────────────────────────
+    DPad Up / Down    — navigate focusable elements (buttons, toggles, sliders…)
+                        Focused element is highlighted and auto-scrolled into view.
+                        Elements smaller than 8×8 px are skipped automatically.
+    DPad Left / Right — cycle through sub-tabs of the active main tab
+    LB (ButtonL1)     — switch to previous main tab
+    RB (ButtonR1)     — switch to next main tab
+    A  (ButtonA)      — activate / click the focused element
+    B  (ButtonB)      — close the menu
+    Y  (ButtonY)      — fast-scroll active panel upward
+    X  (ButtonX)      — fast-scroll active panel downward
+
+  Joystick mode (Library.ControllerNavType = "Joystick")
+  ───────────────────────────────────────────────────────
+    Right stick       — move virtual cursor (small circle drawn via Drawing API)
+    Left  stick       — scroll active panel content
+    A  (ButtonA)      — click element under the virtual cursor
+    B  (ButtonB)      — close the menu
+    LB / RB           — switch main tabs (same as DPad mode)
+    Y / X             — fast-scroll panel  (same as DPad mode)
+
+    The virtual cursor Drawing object is managed by CtrlCursorRef. It is cleaned
+    up automatically on Library:Unload() and is not created unless
+    Library.ControllerSupport = true.
+
+  Other properties:
+    Library.ControllerNavSensitivity : number — joystick cursor speed (default 5)
+
+════════════════════════════════════════════════════════════════════════════════
+  CUSTOM CURSOR
+════════════════════════════════════════════════════════════════════════════════
+  The library replaces the default Roblox cursor with a Drawing-based cursor
+  (crosshair / dot / plus styles) when DrawingLib is available.
+
+  The cursor block runs at most once per CreateWindow call (CursorCreated flag).
+  Spamming the menu open key will NOT produce duplicate cursor objects.
+
+  All Drawing property writes inside the cursor RenderStep are wrapped in pcall
+  so a swapped or garbage-collected DrawingLib cannot crash the render loop.
+
+  Cleanup
+  ───────
+  Library._DrawingCleanup holds a list of functions registered at cursor-creation
+  time. Library:Unload() iterates this list (in order) and calls each function
+  inside pcall, then clears the list. This ensures:
+    • The system mouse icon is restored (MouseIconEnabled reset to original state)
+    • All cursor Drawing objects (fill, outline, dot, plus bars) are :Remove()d
+    • The controller virtual-cursor Drawing object is :Remove()d
+    • RunService RenderSteps ("LinoriaCursor", "LinoriaControllerNav") are unbound
+
+════════════════════════════════════════════════════════════════════════════════
+  MENU TOGGLE STABILITY
+════════════════════════════════════════════════════════════════════════════════
+  Library:Toggle() is guarded against several failure modes:
+
+    • Library.Unloaded guard  — returns immediately if the library was unloaded
+      while a toggle was in flight.
+    • Re-entrancy guard       — if a fade is already running (Fading == true)
+      further Toggle calls are dropped until it completes.
+    • Fading safety net       — a task.delay fires FadeTime + 3 seconds after the
+      toggle starts. If Fading is still true at that point (e.g. an error killed
+      the normal completion path) it resets Fading = false so the menu is never
+      permanently locked.
+
+════════════════════════════════════════════════════════════════════════════════
+]=]
+
 --// Window \\--
 function Library:CreateWindow(...)
     local Arguments = { ... }
@@ -8309,7 +8633,16 @@ function Library:CreateWindow(...)
         return Dialog
     end
 
-    function Window:AddTab(Name)
+    -- AddTab(Name [, IconName [, IconOptions]])
+    -- IconOptions = { IconSide="Left"|"Right"|"Middle", IconColor=Color3 }
+    function Window:AddTab(Name, IconName, IconOptions)
+        -- Track insertion order for controller LB/RB navigation
+        if not Window._TabOrder then Window._TabOrder = {} end
+        table.insert(Window._TabOrder, Name)
+
+        local _iSide  = (typeof(IconOptions) == "table" and IconOptions.IconSide)  or nil
+        local _iColor = (typeof(IconOptions) == "table" and IconOptions.IconColor)  or nil
+
         local Tab = {
             Groupboxes = {};
             Tabboxes = {};
@@ -8322,10 +8655,13 @@ function Library:CreateWindow(...)
                 Title = "WARNING",
                 Text = ""
             };
-            OriginalName = Name; 
+            OriginalName = Name;
             Name = Name;
             TableType = "Tab";
         }
+
+        -- Extra width for icon
+        local _iconExtra = (typeof(IconName) == "string" and IconName ~= "") and (_ICON_SZ + _ICON_GAP) or 0
 
         local _tbTextW = Library:GetTextBounds(Tab.Name, Library.Font, 16)
         local TabButtonWidth = Library.IgnoreTabSizes
@@ -8335,7 +8671,7 @@ function Library:CreateWindow(...)
         local TabButton = Library:Create("Frame", {
             BackgroundColor3 = Library.BackgroundColor;
             BorderColor3 = Library.OutlineColor;
-            Size = UDim2.new(0, TabButtonWidth + 8 + 4, 0.85, 0);
+            Size = UDim2.new(0, TabButtonWidth + 8 + 4 + _iconExtra, 0.85, 0);
             ZIndex = 1;
             Parent = TabArea;
         })
@@ -8354,6 +8690,9 @@ function Library:CreateWindow(...)
             Parent = TabButton;
         })
         Tab.ButtonLabel = TabButtonLabel
+
+        -- Attach icon (shifts label automatically)
+        Library:_ApplyTabIcon(TabButtonLabel, TabButton, IconName, _iSide, _iColor, 2)
 
         local TabHighlight = Library:Create("Frame", {
             BackgroundColor3 = Library.AccentColor;
@@ -8645,6 +8984,7 @@ end
             Library.RegistryMap[TabButton].Properties.BackgroundColor3 = "MainColor"
             TabHighlight.Visible = true
             TabFrame.Visible = true
+            Library:_PlayTabAnimation(TabFrame)
 
             Tab:Resize()
 
@@ -8755,6 +9095,9 @@ end
             })
             Groupbox.TitleLabel = GroupboxLabel
 
+            -- Optional icon in the groupbox header
+            Library:_ApplyTabIcon(GroupboxLabel, BoxInner, Info.Icon, Info.IconSide, Info.IconColor, 6)
+
             local Container = Library:Create("Frame", {
                 BackgroundTransparency = 1;
                 Position = UDim2.new(0, 4, 0, 20);
@@ -8802,12 +9145,14 @@ end
             return Groupbox
         end
 
-        function Tab:AddLeftGroupbox(Name)
-            return Tab:AddGroupbox({ Side = 1; Name = Name; })
+        -- AddLeftGroupbox(Name [, IconName [, IconOptions]])
+        function Tab:AddLeftGroupbox(Name, IconName, IconOptions)
+            return Tab:AddGroupbox({ Side = 1; Name = Name; Icon = IconName; IconSide = (typeof(IconOptions) == "table" and IconOptions.IconSide) or nil; IconColor = (typeof(IconOptions) == "table" and IconOptions.IconColor) or nil; })
         end
 
-        function Tab:AddRightGroupbox(Name)
-            return Tab:AddGroupbox({ Side = 2; Name = Name; })
+        -- AddRightGroupbox(Name [, IconName [, IconOptions]])
+        function Tab:AddRightGroupbox(Name, IconName, IconOptions)
+            return Tab:AddGroupbox({ Side = 2; Name = Name; Icon = IconName; IconSide = (typeof(IconOptions) == "table" and IconOptions.IconSide) or nil; IconColor = (typeof(IconOptions) == "table" and IconOptions.IconColor) or nil; })
         end
 
         function Tab:AddTabbox(Info)
@@ -8870,7 +9215,12 @@ end
                 Parent = TabboxButtons;
             })
 
-            function Tabbox:AddTab(Name)
+            -- AddTab(Name [, IconName [, IconOptions]])
+            -- IconOptions = { IconSide="Left"|"Right"|"Middle", IconColor=Color3 }
+            function Tabbox:AddTab(Name, IconName, IconOptions)
+                local _iSide  = (typeof(IconOptions) == "table" and IconOptions.IconSide)  or nil
+                local _iColor = (typeof(IconOptions) == "table" and IconOptions.IconColor)  or nil
+
                 local Tab = {
                     Elements = {};
                     Container = nil;
@@ -8899,6 +9249,9 @@ end
                     RichText = true;
                 })
                 Tab.ButtonLabel = ButtonLabel
+
+                -- Attach optional icon
+                Library:_ApplyTabIcon(ButtonLabel, Button, IconName, _iSide, _iColor, 8)
 
                 local Block = Library:Create("Frame", {
                     BackgroundColor3 = Library.BackgroundColor;
@@ -9007,6 +9360,8 @@ end
             return Tabbox
         end
 
+        -- AddLeftTabbox(Name) / AddRightTabbox(Name)
+        -- Icon args belong to individual Tabbox:AddTab() calls, not the box itself.
         function Tab:AddLeftTabbox(Name)
             return Tab:AddTabbox({ Name = Name, Side = 1; })
         end
@@ -9015,7 +9370,12 @@ end
             return Tab:AddTabbox({ Name = Name, Side = 2; })
         end
 
-        function Tab:AddTab(SubName)
+        -- AddTab(SubName [, IconName [, IconOptions]])
+        -- IconOptions = { IconSide="Left"|"Right"|"Middle", IconColor=Color3 }
+        function Tab:AddTab(SubName, IconName, IconOptions)
+            local _iSide  = (typeof(IconOptions) == "table" and IconOptions.IconSide)  or nil
+            local _iColor = (typeof(IconOptions) == "table" and IconOptions.IconColor)  or nil
+
             if not Tab.SubTabs then
                 Tab.SubTabs = {}
                 Tab.ActiveSubTabName = nil
@@ -9081,11 +9441,12 @@ end
                 TableType = "Tab";
             }
 
+            local _subIconExtra = (typeof(IconName) == "string" and IconName ~= "") and (_ICON_SZ + _ICON_GAP) or 0
             local _subBtnTextW = Library:GetTextBounds(SubName, Library.Font, 14)
             local subBtnW = Library.IgnoreTabSizes
                 and math.max(_subBtnTextW, Library.TabSize * 16)
                 or _subBtnTextW
-            subBtnW = subBtnW + 22
+            subBtnW = subBtnW + 22 + _subIconExtra
 
             local SubBtn = Library:Create("Frame", {
                 BackgroundColor3 = Library.BackgroundColor;
@@ -9120,6 +9481,9 @@ end
             })
             SubTab.ButtonLabel = SubBtnLabel
 
+            -- Attach icon (shifts label automatically)
+            Library:_ApplyTabIcon(SubBtnLabel, SubBtnInner, IconName, _iSide, _iColor, 7)
+
             function SubTab:SetName(Name)
                 if typeof(Name) == "string" then
                     SubTab.Name = Name
@@ -9127,7 +9491,7 @@ end
                     local w = Library.IgnoreTabSizes
                         and math.max(_w, Library.TabSize * 16)
                         or _w
-                    SubBtn.Size = UDim2.new(0, w + 22, 0.9, 0)
+                    SubBtn.Size = UDim2.new(0, w + 22 + _subIconExtra, 0.9, 0)
                     SubBtnLabel.Text = Name
                 end
             end
@@ -9219,6 +9583,7 @@ end
                 SubBtnInner.BackgroundColor3 = Library.MainColor
                 Library.RegistryMap[SubBtnInner].Properties.BackgroundColor3 = "MainColor"
                 SubTabFrame.Visible = true
+                Library:_PlayTabAnimation(SubTabFrame)
                 Tab._SubTabContent.Visible = true
                 if Tab.HasDirectElements then
                     LeftSide.Visible = false
@@ -9283,7 +9648,7 @@ end
                     Parent = BoxInner;
                 })
                 Library:AddToRegistry(Highlight, { BackgroundColor3 = "AccentColor" })
-                Library:CreateLabel({
+                local SubGbLabel = Library:CreateLabel({
                     Size = UDim2.new(1, 0, 0, 18);
                     Position = UDim2.new(0, 4, 0, 2);
                     TextSize = 14;
@@ -9292,6 +9657,9 @@ end
                     ZIndex = 5;
                     Parent = BoxInner;
                 })
+                Groupbox.TitleLabel = SubGbLabel
+                -- Optional icon in the groupbox header
+                Library:_ApplyTabIcon(SubGbLabel, BoxInner, Info.Icon, Info.IconSide, Info.IconColor, 6)
                 local Container = Library:Create("Frame", {
                     BackgroundTransparency = 1;
                     Position = UDim2.new(0, 4, 0, 20);
@@ -9320,11 +9688,13 @@ end
                 SubTab.Groupboxes[Info.Name] = Groupbox
                 return Groupbox
             end
-            function SubTab:AddLeftGroupbox(Name)
-                return SubTab:AddGroupbox({ Side = 1; Name = Name; })
+            -- AddLeftGroupbox(Name [, IconName [, IconOptions]])
+            function SubTab:AddLeftGroupbox(Name, IconName, IconOptions)
+                return SubTab:AddGroupbox({ Side = 1; Name = Name; Icon = IconName; IconSide = (typeof(IconOptions) == "table" and IconOptions.IconSide) or nil; IconColor = (typeof(IconOptions) == "table" and IconOptions.IconColor) or nil; })
             end
-            function SubTab:AddRightGroupbox(Name)
-                return SubTab:AddGroupbox({ Side = 2; Name = Name; })
+            -- AddRightGroupbox(Name [, IconName [, IconOptions]])
+            function SubTab:AddRightGroupbox(Name, IconName, IconOptions)
+                return SubTab:AddGroupbox({ Side = 2; Name = Name; Icon = IconName; IconSide = (typeof(IconOptions) == "table" and IconOptions.IconSide) or nil; IconColor = (typeof(IconOptions) == "table" and IconOptions.IconColor) or nil; })
             end
 
             function SubTab:AddTabbox(Info)
@@ -9374,7 +9744,12 @@ end
                     Parent = TabboxButtons;
                 })
 
-                function Tabbox:AddTab(Name)
+                -- AddTab(Name [, IconName [, IconOptions]])
+                -- IconOptions = { IconSide="Left"|"Right"|"Middle", IconColor=Color3 }
+                function Tabbox:AddTab(Name, IconName, IconOptions)
+                    local _iSide  = (typeof(IconOptions) == "table" and IconOptions.IconSide)  or nil
+                    local _iColor = (typeof(IconOptions) == "table" and IconOptions.IconColor)  or nil
+
                     local TabboxTab = {
                         Elements = {};
                         Container = nil;
@@ -9398,6 +9773,8 @@ end
                         RichText = true;
                     })
                     TabboxTab.ButtonLabel = ButtonLabel
+                    -- Attach optional icon
+                    Library:_ApplyTabIcon(ButtonLabel, Button, IconName, _iSide, _iColor, 8)
                     local Block = Library:Create("Frame", {
                         BackgroundColor3 = Library.BackgroundColor;
                         BorderSizePixel = 0;
@@ -9519,25 +9896,39 @@ end
     local TransparencyCache = {}
     local Toggled = false
     local Fading = false
+    -- Cursor state persisted across toggles so drawing objects are never duplicated
+    local CursorCreated     = false
+    local CtrlCursorRef     = nil  -- persistent ref for controller virtual cursor
 
     function Library:Toggle(Toggling)
+        if Library.Unloaded then return end
         if typeof(Toggling) == "boolean" and Toggling == Toggled then return end
         if Fading then return end
 
-        local FadeTime = WindowInfo.MenuFadeTime
+        local FadeTime = typeof(WindowInfo.MenuFadeTime) == "number" and WindowInfo.MenuFadeTime or 0.2
         Fading = true
         Toggled = (not Toggled)
 
+        -- Safety net: if an unexpected error leaves Fading=true, this timer resets it
+        -- so the menu never becomes permanently locked.
+        local _fadeSafety = task.delay(FadeTime + 3, function()
+            if Fading then
+                Fading = false
+                warn("[Library] Toggle safety net fired — Fading was stuck; state may be inconsistent.")
+            end
+        end)
+
         Library.Toggled = Toggled
         if WindowInfo.UnlockMouseWhileOpen then
-            ModalElement.Modal = Library.Toggled
+            pcall(function() ModalElement.Modal = Library.Toggled end)
         end
 
         if Toggled then
             Outer.Visible = true
 
-            if DrawingLib.drawing_replaced ~= true and IsBadDrawingLib ~= true then
+            if DrawingLib.drawing_replaced ~= true and IsBadDrawingLib ~= true and not CursorCreated then
                 IsBadDrawingLib = not (pcall(function()
+                    CursorCreated = true  -- set before any yield so duplicates can't slip through
                     -- Mouse type
                     local MouseFill    = DrawingLib.new("Triangle")
                     MouseFill.Thickness = 1
@@ -9568,6 +9959,20 @@ end
                     end
 
                     local OldMouseIconState = InputService.MouseIconEnabled
+
+                    -- Register a cleanup so Library:Unload can remove these Drawing objects
+                    table.insert(Library._DrawingCleanup, function()
+                        pcall(function() InputService.MouseIconEnabled = OldMouseIconState end)
+                        pcall(function() MouseFill:Remove()   end)
+                        pcall(function() MouseOutline:Remove() end)
+                        pcall(function() DotFill:Remove()     end)
+                        pcall(function() DotOutline:Remove()  end)
+                        for i = 1, 4 do
+                            pcall(function() PlusBars[i]:Remove()    end)
+                            pcall(function() PlusOutlines[i]:Remove() end)
+                        end
+                    end)
+
                     pcall(function() RunService:UnbindFromRenderStep("LinoriaCursor") end)
                     RunService:BindToRenderStep("LinoriaCursor", Enum.RenderPriority.Camera.Value - 1, function()
                         if not Toggled or (not ScreenGui or not ScreenGui.Parent) then
@@ -9584,78 +9989,84 @@ end
                             return
                         end
 
-                        local show = Library.ShowCustomCursor
-                        InputService.MouseIconEnabled = not show
-
-                        local mPos = InputService:GetMouseLocation()
-                        local X, Y = mPos.X, mPos.Y
-                        local col  = Library.CursorColor or Library.AccentColor
+                        local show  = Library.ShowCustomCursor
+                        local mPos  = InputService:GetMouseLocation()
+                        local X     = mPos and mPos.X or 0
+                        local Y     = mPos and mPos.Y or 0
+                        local col   = Library.CursorColor or Library.AccentColor
                         local ctype = Library.CursorType or "Mouse"
 
-                        -- hide everything first
-                        MouseFill.Visible  = false
-                        MouseOutline.Visible = false
-                        DotFill.Visible    = false
-                        DotOutline.Visible = false
-                        for i = 1, 4 do
-                            PlusBars[i].Visible    = false
-                            PlusOutlines[i].Visible = false
-                        end
+                        pcall(function() InputService.MouseIconEnabled = not show end)
+
+                        -- Wrap all Drawing property writes; a corrupt Drawing lib
+                        -- must not crash the entire RenderStep.
+                        pcall(function()
+                            -- hide everything first
+                            MouseFill.Visible    = false
+                            MouseOutline.Visible = false
+                            DotFill.Visible      = false
+                            DotOutline.Visible   = false
+                            for i = 1, 4 do
+                                PlusBars[i].Visible    = false
+                                PlusOutlines[i].Visible = false
+                            end
+                        end)
 
                         if show then
-                            if ctype == "Dot" then
-                                local r = math.max(1, Library.CursorDotScale or 5)
-                                DotFill.Position  = Vector2.new(X, Y)
-                                DotFill.Radius    = r
-                                DotFill.Color     = col
-                                DotFill.Visible   = true
-                                if Library.CursorDotOutline then
-                                    local t = math.max(0.1, Library.CursorDotOutlineThickness or 1)
-                                    DotOutline.Position  = Vector2.new(X, Y)
-                                    DotOutline.Radius    = r + t
-                                    DotOutline.Thickness = t
-                                    DotOutline.Visible   = true
-                                end
-
-                            elseif ctype == "Plus" then
-                                local sp  = Library.CursorPlusSpacing or 2
-                                local len = 7
-                                local t2  = 2
-                                local ot  = math.max(0.1, Library.CursorPlusOutlineThickness or 1)
-                                -- dirs: 1=Top, 2=Right, 3=Bottom, 4=Left
-                                local dirs = {
-                                    { Vector2.new(X, Y - sp), Vector2.new(X, Y - sp - len), Library.CursorPlusTopBar },
-                                    { Vector2.new(X + sp, Y), Vector2.new(X + sp + len, Y), Library.CursorPlusRightBar },
-                                    { Vector2.new(X, Y + sp), Vector2.new(X, Y + sp + len), Library.CursorPlusBottomBar },
-                                    { Vector2.new(X - sp, Y), Vector2.new(X - sp - len, Y), Library.CursorPlusLeftBar },
-                                }
-                                for i, d in ipairs(dirs) do
-                                    if d[3] ~= false then
-                                        if Library.CursorPlusOutline then
-                                            PlusOutlines[i].From      = d[1]
-                                            PlusOutlines[i].To        = d[2]
-                                            PlusOutlines[i].Thickness = t2 + ot * 2
-                                            PlusOutlines[i].Visible   = true
-                                        end
-                                        PlusBars[i].From      = d[1]
-                                        PlusBars[i].To        = d[2]
-                                        PlusBars[i].Thickness = t2
-                                        PlusBars[i].Color     = col
-                                        PlusBars[i].Visible   = true
+                            pcall(function()
+                                if ctype == "Dot" then
+                                    local r = math.max(1, Library.CursorDotScale or 5)
+                                    DotFill.Position = Vector2.new(X, Y)
+                                    DotFill.Radius   = r
+                                    DotFill.Color    = col
+                                    DotFill.Visible  = true
+                                    if Library.CursorDotOutline then
+                                        local dt = math.max(0.1, Library.CursorDotOutlineThickness or 1)
+                                        DotOutline.Position  = Vector2.new(X, Y)
+                                        DotOutline.Radius    = r + dt
+                                        DotOutline.Thickness = dt
+                                        DotOutline.Visible   = true
                                     end
-                                end
 
-                            else -- "Mouse"
-                                MouseFill.Color  = col
-                                MouseFill.PointA = Vector2.new(X, Y)
-                                MouseFill.PointB = Vector2.new(X + 16, Y + 6)
-                                MouseFill.PointC = Vector2.new(X + 6, Y + 16)
-                                MouseFill.Visible = true
-                                MouseOutline.PointA = MouseFill.PointA
-                                MouseOutline.PointB = MouseFill.PointB
-                                MouseOutline.PointC = MouseFill.PointC
-                                MouseOutline.Visible = true
-                            end
+                                elseif ctype == "Plus" then
+                                    local sp  = Library.CursorPlusSpacing or 2
+                                    local len = 7
+                                    local t2  = 2
+                                    local ot  = math.max(0.1, Library.CursorPlusOutlineThickness or 1)
+                                    local dirs = {
+                                        { Vector2.new(X, Y - sp),    Vector2.new(X, Y - sp - len),    Library.CursorPlusTopBar },
+                                        { Vector2.new(X + sp, Y),    Vector2.new(X + sp + len, Y),    Library.CursorPlusRightBar },
+                                        { Vector2.new(X, Y + sp),    Vector2.new(X, Y + sp + len),    Library.CursorPlusBottomBar },
+                                        { Vector2.new(X - sp, Y),    Vector2.new(X - sp - len, Y),    Library.CursorPlusLeftBar },
+                                    }
+                                    for i, d in ipairs(dirs) do
+                                        if d[3] ~= false then
+                                            if Library.CursorPlusOutline then
+                                                PlusOutlines[i].From      = d[1]
+                                                PlusOutlines[i].To        = d[2]
+                                                PlusOutlines[i].Thickness = t2 + ot * 2
+                                                PlusOutlines[i].Visible   = true
+                                            end
+                                            PlusBars[i].From      = d[1]
+                                            PlusBars[i].To        = d[2]
+                                            PlusBars[i].Thickness = t2
+                                            PlusBars[i].Color     = col
+                                            PlusBars[i].Visible   = true
+                                        end
+                                    end
+
+                                else -- "Mouse"
+                                    MouseFill.Color  = col
+                                    MouseFill.PointA = Vector2.new(X, Y)
+                                    MouseFill.PointB = Vector2.new(X + 16, Y + 6)
+                                    MouseFill.PointC = Vector2.new(X + 6, Y + 16)
+                                    MouseFill.Visible = true
+                                    MouseOutline.PointA = MouseFill.PointA
+                                    MouseOutline.PointB = MouseFill.PointB
+                                    MouseOutline.PointC = MouseFill.PointC
+                                    MouseOutline.Visible = true
+                                end
+                            end)
                         end
 
                     end)
@@ -9665,29 +10076,51 @@ end
             if Library.ControllerSupport then
                 pcall(function() RunService:UnbindFromRenderStep("LinoriaControllerNav") end)
 
-                local CtrlFocusIndex = 0
+                local CtrlFocusIndex     = 0
                 local CtrlFocusHighlight = nil
-                local CtrlVirtualCursor = nil
+                -- CtrlCursorRef is declared at CreateWindow scope above Toggle so it persists across open/close
                 local CtrlVirtualCursorPos = Vector2.new(
                     workspace.CurrentCamera.ViewportSize.X / 2,
                     workspace.CurrentCamera.ViewportSize.Y / 2
                 )
 
+                -- Returns true if obj and all ancestors up to ScreenGui are visible
                 local function IsActuallyVisible(obj)
                     local cur = obj
                     while cur and cur ~= ScreenGui do
-                        if not cur.Visible then return false end
+                        local ok, vis = pcall(function() return cur.Visible end)
+                        if not ok or not vis then return false end
                         cur = cur.Parent
                     end
                     return true
                 end
 
+                -- Returns true if obj is inside the active tab / sub-tab content area
+                local function IsInsideActiveContent(obj)
+                    local cur = obj
+                    while cur and cur ~= ScreenGui do
+                        -- Skip elements that live in hidden TabFrames (inactive tabs)
+                        if cur.Name == "TabFrame" and not cur.Visible then
+                            return false
+                        end
+                        cur = cur.Parent
+                    end
+                    return true
+                end
+
+                -- Collect interactive buttons sorted top-to-bottom, left-to-right,
+                -- filtered to those actually reachable in the current view.
                 local function GetNavigableElements()
                     local elements = {}
                     for _, btn in ipairs(ScreenGui:GetDescendants()) do
-                        if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and IsActuallyVisible(btn) and btn.Active ~= false then
+                        if (btn:IsA("TextButton") or btn:IsA("ImageButton"))
+                            and btn.Active ~= false
+                            and IsActuallyVisible(btn)
+                            and IsInsideActiveContent(btn)
+                        then
                             local sz = btn.AbsoluteSize
-                            if sz.X > 4 and sz.Y > 4 then
+                            -- Ignore tiny decorative/invisible buttons
+                            if sz.X > 8 and sz.Y > 8 then
                                 table.insert(elements, btn)
                             end
                         end
@@ -9695,7 +10128,7 @@ end
                     table.sort(elements, function(a, b)
                         local ay = a.AbsolutePosition.Y
                         local by = b.AbsolutePosition.Y
-                        if math.abs(ay - by) > 4 then return ay < by end
+                        if math.abs(ay - by) > 6 then return ay < by end
                         return a.AbsolutePosition.X < b.AbsolutePosition.X
                     end)
                     return elements
@@ -9708,48 +10141,141 @@ end
                     end
                     if not frame then return end
                     local hl = Instance.new("UIStroke")
-                    hl.Color = Library.AccentColor
-                    hl.Thickness = 2
-                    hl.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                    hl.Parent = frame
-                    CtrlFocusHighlight = hl
+                    hl.Color             = Library.AccentColor
+                    hl.Thickness         = 2
+                    hl.ApplyStrokeMode   = Enum.ApplyStrokeMode.Border
+                    hl.Parent            = frame
+                    CtrlFocusHighlight   = hl
                 end
 
                 local function FireButton(btn)
                     pcall(function()
-                        btn.InputBegan:Fire({ UserInputType = Enum.UserInputType.MouseButton1, KeyCode = Enum.KeyCode.Unknown })
+                        btn.InputBegan:Fire({
+                            UserInputType = Enum.UserInputType.MouseButton1,
+                            KeyCode       = Enum.KeyCode.Unknown,
+                        })
                     end)
-                    pcall(function()
-                        btn.MouseButton1Click:Fire()
-                    end)
+                    pcall(function() btn.MouseButton1Click:Fire() end)
                 end
 
                 local function CtrlActivateFocused(elements)
                     if CtrlFocusIndex < 1 or CtrlFocusIndex > #elements then return end
                     local el = elements[CtrlFocusIndex]
-                    if el and el.Parent then
-                        FireButton(el)
+                    if el and el.Parent then FireButton(el) end
+                end
+
+                -- ── Tab switching helpers (LB / RB) ──────────────────────────────
+                local function GetOrderedTabs()
+                    return Window._TabOrder or {}
+                end
+
+                local function SwitchTabByDelta(delta)
+                    local order = GetOrderedTabs()
+                    if #order == 0 then return end
+                    local currentIdx = 1
+                    for i, tName in ipairs(order) do
+                        if tName == Library.ActiveTab then currentIdx = i; break end
+                    end
+                    local nextIdx = ((currentIdx - 1 + delta) % #order) + 1
+                    local nextName = order[nextIdx]
+                    local nextTab  = Window.Tabs[nextName]
+                    if nextTab then nextTab:ShowTab() end
+                end
+
+                -- ── Sub-tab switching helpers (DPad Left / Right) ────────────────
+                local function SwitchSubTabByDelta(delta)
+                    local activeTabName = Library.ActiveTab
+                    if not activeTabName then return end
+                    local activeTab = Window.Tabs[activeTabName]
+                    if not (activeTab and activeTab.SubTabs) then return end
+
+                    -- Build ordered list from the scroll area children
+                    local scrollArea = activeTab._SubTabScrollArea
+                    if not scrollArea then return end
+
+                    local subNames = {}
+                    for _, child in ipairs(scrollArea:GetChildren()) do
+                        if not child:IsA("UIListLayout") then
+                            -- match child frame to a SubTab by its _btn reference
+                            for sName, st in pairs(activeTab.SubTabs) do
+                                if st._btn == child then
+                                    table.insert(subNames, sName)
+                                    break
+                                end
+                            end
+                        end
+                    end
+
+                    if #subNames == 0 then return end
+
+                    local currentIdx = 1
+                    for i, sName in ipairs(subNames) do
+                        if sName == Library.ActiveSubTab then currentIdx = i; break end
+                    end
+                    local nextIdx  = ((currentIdx - 1 + delta) % #subNames) + 1
+                    local nextSt   = activeTab.SubTabs[subNames[nextIdx]]
+                    if nextSt then nextSt:ShowTab() end
+                end
+
+                -- ── Scroll active side-panel with left stick ─────────────────────
+                local function ScrollActivePanelByDelta(dy)
+                    local activeTabName = Library.ActiveTab
+                    if not activeTabName then return end
+                    local activeTab = Window.Tabs[activeTabName]
+                    if not activeTab then return end
+
+                    local sides = activeTab:GetSides and activeTab:GetSides()
+                    if not sides then return end
+
+                    for _, sf in pairs(sides) do
+                        if sf.Visible then
+                            sf.CanvasPosition = Vector2.new(
+                                sf.CanvasPosition.X,
+                                math.clamp(sf.CanvasPosition.Y + dy, 0, math.max(0, sf.AbsoluteCanvasSize.Y - sf.AbsoluteSize.Y))
+                            )
+                        end
                     end
                 end
 
-                if Library.ControllerNavType == "Joystick" then
+                -- ── Virtual cursor (Joystick mode) ───────────────────────────────
+                -- Always clean up any leftover cursor from a previous session first,
+                -- so we never end up with two drawing objects on screen.
+                if CtrlCursorRef then
+                    pcall(function() CtrlCursorRef:Remove() end)
+                    CtrlCursorRef = nil
+                end
+
+                if Library.ControllerSupport and Library.ControllerNavType == "Joystick" then
                     pcall(function()
-                        CtrlVirtualCursor = DrawingLib.new("Circle")
-                        CtrlVirtualCursor.Radius   = 6
-                        CtrlVirtualCursor.Filled   = true
-                        CtrlVirtualCursor.NumSides  = 32
-                        CtrlVirtualCursor.Color    = Library.CursorColor or Library.AccentColor
-                        CtrlVirtualCursor.Position = CtrlVirtualCursorPos
-                        CtrlVirtualCursor.Visible  = true
+                        CtrlCursorRef           = DrawingLib.new("Circle")
+                        CtrlCursorRef.Radius    = 6
+                        CtrlCursorRef.Filled    = true
+                        CtrlCursorRef.NumSides  = 32
+                        CtrlCursorRef.Color     = Library.CursorColor or Library.AccentColor
+                        CtrlCursorRef.Position  = CtrlVirtualCursorPos
+                        CtrlCursorRef.Visible   = true
+                    end)
+
+                    -- Register cleanup so Library:Unload removes this Drawing object
+                    table.insert(Library._DrawingCleanup, function()
+                        if CtrlCursorRef then
+                            pcall(function() CtrlCursorRef:Remove() end)
+                            CtrlCursorRef = nil
+                        end
                     end)
                 end
 
-                local DPadCooldown = 0
+                -- ── RenderStep: continuous DPad / stick navigation ───────────────
+                local DPadCooldown  = 0
+                local StickScrollCD = 0
                 RunService:BindToRenderStep("LinoriaControllerNav", Enum.RenderPriority.Camera.Value - 1, function(delta)
                     if not Toggled or not ScreenGui or not ScreenGui.Parent then
                         pcall(function() RunService:UnbindFromRenderStep("LinoriaControllerNav") end)
                         SetCtrlHighlight(nil)
-                        if CtrlVirtualCursor then pcall(function() CtrlVirtualCursor:Remove() end) CtrlVirtualCursor = nil end
+                        if CtrlCursorRef then
+                            pcall(function() CtrlCursorRef:Remove() end)
+                            CtrlCursorRef = nil
+                        end
                         return
                     end
 
@@ -9758,63 +10284,121 @@ end
                     end)
                     if not ok or not rawState then return end
 
-                    -- GetGamepadState returns an array of InputObjects; build a KeyCode lookup
                     local stateMap = {}
                     for _, inputObj in ipairs(rawState) do
                         stateMap[inputObj.KeyCode] = inputObj
                     end
 
+                    -- Joystick mode: move virtual cursor with right stick
                     if Library.ControllerNavType == "Joystick" then
-                        local stickState = stateMap[Enum.KeyCode.Thumbstick1] or stateMap[Enum.KeyCode.Thumbstick2]
+                        local stickState = stateMap[Enum.KeyCode.Thumbstick2] or stateMap[Enum.KeyCode.Thumbstick1]
                         if stickState then
                             local sens = (typeof(Library.ControllerNavSensitivity) == "number" and Library.ControllerNavSensitivity or 5) * 10
-                            local vp = workspace.CurrentCamera.ViewportSize
+                            local vp   = workspace.CurrentCamera.ViewportSize
+                            local pos  = stickState.Position
                             CtrlVirtualCursorPos = Vector2.new(
-                                math.clamp(CtrlVirtualCursorPos.X + stickState.Position.X * sens * delta, 0, vp.X),
-                                math.clamp(CtrlVirtualCursorPos.Y - stickState.Position.Y * sens * delta, 0, vp.Y)
+                                math.clamp(CtrlVirtualCursorPos.X + (pos and pos.X or 0) * sens * delta, 0, vp.X),
+                                math.clamp(CtrlVirtualCursorPos.Y - (pos and pos.Y or 0) * sens * delta, 0, vp.Y)
                             )
-                            if CtrlVirtualCursor then
+                            if CtrlCursorRef then
                                 pcall(function()
-                                    CtrlVirtualCursor.Position = CtrlVirtualCursorPos
-                                    CtrlVirtualCursor.Color = Library.CursorColor or Library.AccentColor
+                                    CtrlCursorRef.Position = CtrlVirtualCursorPos
+                                    CtrlCursorRef.Color    = Library.CursorColor or Library.AccentColor
                                 end)
+                            end
+                        end
+                        -- Left stick scrolls content in Joystick mode
+                        StickScrollCD = StickScrollCD - delta
+                        if StickScrollCD <= 0 then
+                            local ls = stateMap[Enum.KeyCode.Thumbstick1]
+                            if ls then
+                                local lsPos = ls.Position
+                                local ly = lsPos and lsPos.Y or 0
+                                if math.abs(ly) > 0.25 then
+                                    ScrollActivePanelByDelta(-ly * 40)
+                                    StickScrollCD = 0.05
+                                end
                             end
                         end
                         return
                     end
 
+                    -- DPad mode: Up/Down navigate elements; Left/Right switch sub-tabs
                     DPadCooldown = DPadCooldown - delta
                     if DPadCooldown > 0 then return end
 
                     local dpadUp    = stateMap[Enum.KeyCode.DPadUp]
                     local dpadDown  = stateMap[Enum.KeyCode.DPadDown]
+                    local dpadLeft  = stateMap[Enum.KeyCode.DPadLeft]
+                    local dpadRight = stateMap[Enum.KeyCode.DPadRight]
 
+                    local upHeld    = dpadUp    and (dpadUp.Position    and dpadUp.Position.Z    == 1)
+                    local downHeld  = dpadDown  and (dpadDown.Position  and dpadDown.Position.Z  == 1)
+                    local leftHeld  = dpadLeft  and (dpadLeft.Position  and dpadLeft.Position.Z  == 1)
+                    local rightHeld = dpadRight and (dpadRight.Position and dpadRight.Position.Z == 1)
+
+                    -- Sub-tab switching (DPad Left/Right)
+                    if leftHeld then
+                        DPadCooldown = 0.22
+                        SwitchSubTabByDelta(-1)
+                        return
+                    elseif rightHeld then
+                        DPadCooldown = 0.22
+                        SwitchSubTabByDelta(1)
+                        return
+                    end
+
+                    -- Element navigation (DPad Up/Down)
                     local moveDir = 0
-                    if dpadUp   and dpadUp.Position.Z == 1   then moveDir = -1
-                    elseif dpadDown and dpadDown.Position.Z == 1 then moveDir =  1
+                    if upHeld   then moveDir = -1
+                    elseif downHeld then moveDir =  1
                     end
 
                     if moveDir ~= 0 then
-                        DPadCooldown = 0.18
+                        DPadCooldown = 0.16
                         local elements = GetNavigableElements()
                         if #elements == 0 then return end
                         CtrlFocusIndex = CtrlFocusIndex + moveDir
                         if CtrlFocusIndex < 1 then CtrlFocusIndex = #elements end
                         if CtrlFocusIndex > #elements then CtrlFocusIndex = 1 end
-                        SetCtrlHighlight(elements[CtrlFocusIndex])
+                        local focused = elements[CtrlFocusIndex]
+                        SetCtrlHighlight(focused)
+                        -- Auto-scroll the focused element into view
+                        if focused then
+                            pcall(function()
+                                local par = focused.Parent
+                                while par do
+                                    if par:IsA("ScrollingFrame") then
+                                        local relY = focused.AbsolutePosition.Y - par.AbsolutePosition.Y
+                                        local h    = par.AbsoluteSize.Y
+                                        if relY < 10 then
+                                            par.CanvasPosition = Vector2.new(par.CanvasPosition.X, math.max(0, par.CanvasPosition.Y + relY - 10))
+                                        elseif relY + focused.AbsoluteSize.Y > h - 10 then
+                                            par.CanvasPosition = Vector2.new(par.CanvasPosition.X, par.CanvasPosition.Y + (relY + focused.AbsoluteSize.Y - h + 10))
+                                        end
+                                        break
+                                    end
+                                    par = par.Parent
+                                end
+                            end)
+                        end
                     end
                 end)
 
+                -- ── InputBegan: button presses ───────────────────────────────────
                 local CtrlClickConn = InputService.InputBegan:Connect(function(Input)
                     if not Toggled then return end
                     if Input.UserInputType ~= Enum.UserInputType.Gamepad1 then return end
 
-                    if Input.KeyCode == Enum.KeyCode.ButtonA then
+                    local kc = Input.KeyCode
+
+                    -- A: confirm / click
+                    if kc == Enum.KeyCode.ButtonA then
                         if Library.ControllerNavType == "Joystick" then
-                            local ok, objs = pcall(function()
+                            local ok2, objs = pcall(function()
                                 return InputService:GetGuiObjectsAtPosition(CtrlVirtualCursorPos.X, CtrlVirtualCursorPos.Y)
                             end)
-                            if ok and objs and typeof(objs) == "table" then
+                            if ok2 and objs and typeof(objs) == "table" then
                                 for _, obj in ipairs(objs) do
                                     if obj:IsA("TextButton") or obj:IsA("ImageButton") then
                                         FireButton(obj)
@@ -9826,8 +10410,31 @@ end
                             local elements = GetNavigableElements()
                             CtrlActivateFocused(elements)
                         end
-                    elseif Input.KeyCode == Enum.KeyCode.ButtonB then
+
+                    -- B: close menu
+                    elseif kc == Enum.KeyCode.ButtonB then
                         Library:Toggle(false)
+
+                    -- RB: next tab
+                    elseif kc == Enum.KeyCode.ButtonR1 then
+                        SwitchTabByDelta(1)
+                        -- Reset element focus when tab changes
+                        CtrlFocusIndex = 0
+                        SetCtrlHighlight(nil)
+
+                    -- LB: previous tab
+                    elseif kc == Enum.KeyCode.ButtonL1 then
+                        SwitchTabByDelta(-1)
+                        CtrlFocusIndex = 0
+                        SetCtrlHighlight(nil)
+
+                    -- Y: scroll active panel up (fast)
+                    elseif kc == Enum.KeyCode.ButtonY then
+                        ScrollActivePanelByDelta(-80)
+
+                    -- X: scroll active panel down (fast)
+                    elseif kc == Enum.KeyCode.ButtonX then
+                        ScrollActivePanelByDelta(80)
                     end
                 end)
                 Library:GiveSignal(CtrlClickConn)
@@ -9887,7 +10494,8 @@ end
         end
 
         task.wait(FadeTime)
-        Outer.Visible = Toggled
+        pcall(function() task.cancel(_fadeSafety) end)
+        pcall(function() Outer.Visible = Toggled end)
         Fading = false
     end
 
