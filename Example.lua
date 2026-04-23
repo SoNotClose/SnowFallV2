@@ -1,4 +1,4 @@
--- theres alot in this ill try to add a documentation with everything but u can read library for more info
+-- read doc
 local repo = "https://raw.githubusercontent.com/SoNotClose/SnowFallV2/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local MenuManager = loadstring(game:HttpGet(repo .. "addons/MenuManager.lua"))()
