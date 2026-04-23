@@ -1,4 +1,3 @@
--- read doc
 local repo = "https://raw.githubusercontent.com/SoNotClose/SnowFallV2/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local MenuManager = loadstring(game:HttpGet(repo .. "addons/MenuManager.lua"))()
@@ -10,8 +9,6 @@ local Toggles = Library.Toggles
 
 local Window = Library:CreateWindow({
     Title = "Example",
-	TitleSide = "Middle"
-	-- GameTitle = "" -- also has a side
     Center = true,
     AutoShow = true,
     Resizable = true,
@@ -21,15 +18,19 @@ local Window = Library:CreateWindow({
 })
 
 local Tabs = {
-    Main        = Window:AddTab("Main"),
-    Features    = Window:AddTab("Features"),
-    UISettings  = Window:AddTab("UI Settings"),
+    Main       = Window:AddTab("Main"),
+    UISettings = Window:AddTab("UI Settings"),
 }
 
--- Main tab
-local LeftGroup = Tabs.Main:AddLeftGroupbox("Controls")
+local SubTabs = {
+    Elements = Tabs.Main:AddTab("Elements"),
+    Features = Tabs.Main:AddTab("Features"),
+}
 
-LeftGroup:AddToggle("MyToggle", {
+-- Elements subtab
+local ElemLeft = SubTabs.Elements:AddLeftGroupbox("Controls")
+
+ElemLeft:AddToggle("MyToggle", {
     Text = "Toggle",
     Default = false,
     Callback = function(val)
@@ -44,42 +45,39 @@ LeftGroup:AddToggle("MyToggle", {
     end,
 })
 
-LeftGroup:AddSlider("MySlider", {
+ElemLeft:AddSlider("MySlider", {
     Text = "Slider",
     Default = 50,
     Min = 0,
     Max = 100,
     Rounding = 0,
-    Compact = false,
     Callback = function(val)
         print("MySlider:", val)
     end,
 })
 
-LeftGroup:AddSlider("SubSliderExample", {
+ElemLeft:AddSlider("SubSliderA", {
     Text = "Width",
     Default = 50,
     Min = 0,
     Max = 100,
     Rounding = 0,
-    Compact = false,
-}):AddSlider("SubSliderExample2", {
+}):AddSlider("SubSliderB", {
     Text = "Height",
     Default = 50,
     Min = 0,
     Max = 100,
     Rounding = 0,
-    Compact = false,
 })
 
-LeftGroup:AddSlider("SubSliderCompact", {
+ElemLeft:AddSlider("SubSliderCompactA", {
     Text = "X",
     Default = 0,
     Min = -100,
     Max = 100,
     Rounding = 1,
     Compact = true,
-}):AddSlider("SubSliderCompact2", {
+}):AddSlider("SubSliderCompactB", {
     Text = "Y",
     Default = 0,
     Min = -100,
@@ -88,7 +86,7 @@ LeftGroup:AddSlider("SubSliderCompact", {
     Compact = true,
 })
 
-LeftGroup:AddInput("MyInput", {
+ElemLeft:AddInput("MyInput", {
     Text = "Input",
     Default = "",
     Numeric = false,
@@ -99,10 +97,10 @@ LeftGroup:AddInput("MyInput", {
     end,
 })
 
-LeftGroup:AddDivider()
+ElemLeft:AddDivider()
 
-local MainBtn = LeftGroup:AddButton({
-    Text = "Notify",
+local MainBtn = ElemLeft:AddButton({
+    Text = "Send Notification",
     Func = function()
         Library:Notify({ Title = "Example"; Description = "Button clicked!"; Time = 3 })
     end,
@@ -116,9 +114,9 @@ MainBtn:AddButton({
     DoubleClick = true,
 })
 
-LeftGroup:AddDivider()
+ElemLeft:AddDivider()
 
-LeftGroup:AddLabel("Keybind"):AddKeyPicker("MyKeybind", {
+ElemLeft:AddLabel("Keybind"):AddKeyPicker("MyKeybind", {
     Default = "MB2",
     Mode = "Toggle",
     Text = "My Feature",
@@ -126,15 +124,11 @@ LeftGroup:AddLabel("Keybind"):AddKeyPicker("MyKeybind", {
     Callback = function(val)
         print("MyKeybind state:", val)
     end,
-    ChangedCallback = function(key, mods)
-        print("MyKeybind changed:", key, table.unpack(mods or {}))
-    end,
 })
 
--- Right groupbox
-local RightGroup = Tabs.Main:AddRightGroupbox("Color Pickers")
+local ElemRight = SubTabs.Elements:AddRightGroupbox("Color Pickers")
 
-RightGroup:AddLabel("Standard Picker"):AddColorPicker("StandardColor", {
+ElemRight:AddLabel("Standard"):AddColorPicker("StandardColor", {
     Default = Color3.fromRGB(100, 180, 255),
     Title = "Standard Color",
     Transparency = 0,
@@ -143,7 +137,7 @@ RightGroup:AddLabel("Standard Picker"):AddColorPicker("StandardColor", {
     end,
 })
 
-RightGroup:AddLabel("Gradient Picker"):AddColorPicker("GradientColor", {
+ElemRight:AddLabel("Gradient"):AddColorPicker("GradientColor", {
     Default = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
         ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 255, 80)),
@@ -156,36 +150,13 @@ RightGroup:AddLabel("Gradient Picker"):AddColorPicker("GradientColor", {
     end,
 })
 
-RightGroup:AddDivider()
-
-RightGroup:AddToggle("DepControl", { Text = "Dependency Control", Default = false })
-
-local Depbox = RightGroup:AddDependencyBox()
-
-Depbox:AddSlider("DepSlider", {
-    Text = "Dep Slider",
-    Default = 25,
-    Min = 0,
-    Max = 100,
-    Rounding = 0,
-})
-
-Depbox:AddDropdown("DepDropdown", {
-    Text = "Dep Dropdown",
-    Values = { "Option A", "Option B", "Option C" },
-    Default = 1,
-})
-
-Depbox:SetupDependencies({ { Toggles.DepControl, true } })
-
--- Features tab
-local FeatLeft = Tabs.Features:AddLeftGroupbox("Dropdowns")
+-- Features subtab
+local FeatLeft = SubTabs.Features:AddLeftGroupbox("Dropdowns")
 
 FeatLeft:AddDropdown("SingleDrop", {
     Text = "Single Select",
-    Values = { "A", "B", "C", "D" },
+    Values = { "Alpha", "Beta", "Gamma", "Delta" },
     Default = 1,
-    Searchable = false,
     Callback = function(val)
         print("SingleDrop:", val)
     end,
@@ -193,7 +164,7 @@ FeatLeft:AddDropdown("SingleDrop", {
 
 FeatLeft:AddDropdown("SearchDrop", {
     Text = "Searchable",
-    Values = { "A", "B", "C", "D", "E", "F", "G" },
+    Values = { "Apple", "Banana", "Cherry", "Date", "Elderberry", "Fig", "Grape" },
     Default = 1,
     Searchable = true,
     Callback = function(val)
@@ -206,7 +177,7 @@ FeatLeft:AddDropdown("MultiDrop", {
     Values = { "Red", "Green", "Blue", "Yellow" },
     Default = 1,
     Multi = true,
-    Callback = function(val)
+    Callback = function()
         print("MultiDrop changed")
     end,
 })
@@ -220,33 +191,38 @@ FeatLeft:AddDropdown("PlayerDrop", {
     end,
 })
 
-local FeatRight = Tabs.Features:AddRightTabbox()
-local Tab1 = FeatRight:AddTab("Sliders")
-local Tab2 = FeatRight:AddTab("Labels")
+local FeatRight = SubTabs.Features:AddRightGroupbox("Dependency Box")
 
-Tab1:AddSlider("FormatSlider", {
-    Text = "Custom Display",
-    Default = 0,
-    Min = 0,
-    Max = 10,
-    Rounding = 0,
-    FormatDisplayValue = function(slider, val)
-        if val == 0 then return "Off" end
-        if val == slider.Max then return "Max" end
-    end,
+FeatRight:AddToggle("DepControl", {
+    Text = "Enable Features",
+    Default = false,
 })
 
-Tab1:AddSlider("HideMaxSlider", {
-    Text = "Hide Max",
-    Default = 5,
+local Depbox = FeatRight:AddDependencyBox()
+
+Depbox:AddSlider("DepSlider", {
+    Text = "Feature Strength",
+    Default = 50,
     Min = 0,
     Max = 100,
     Rounding = 0,
-    HideMax = true,
 })
 
-Tab2:AddLabel("This is a short label")
-Tab2:AddLabel("This label\nspans multiple\nlines!", true)
+Depbox:AddDropdown("DepDropdown", {
+    Text = "Feature Mode",
+    Default = 1,
+    Values = { "Mode A", "Mode B", "Mode C" },
+})
+
+local SubDepbox = Depbox:AddDependencyBox()
+
+SubDepbox:AddToggle("SubDepToggle", {
+    Text = "Sub Feature",
+    Default = false,
+})
+
+SubDepbox:SetupDependencies({ { Options.DepDropdown, "Mode B" } })
+Depbox:SetupDependencies({ { Toggles.DepControl, true } })
 
 -- Watermark
 Library:SetWatermarkVisibility(true)
@@ -266,10 +242,11 @@ game:GetService("RunService").RenderStepped:Connect(function()
 end)
 
 Library:OnUnload(function()
-    print("Unloaded!")
     Library.Unloaded = true
+    print("Unloaded!")
 end)
 
+-- UI Settings tab — MenuManager always builds first
 MenuManager:SetLibrary(Library)
 MenuManager:BuildMenuSection(Tabs.UISettings)
 
@@ -277,10 +254,92 @@ ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 
 SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ "MenuBind" })
+SaveManager:SetIgnoreIndexes({ "MenuBind", "LanguageSelect" })
 
 ThemeManager:SetFolder("MyScriptHub")
 SaveManager:SetFolder("MyScriptHub/specific-game")
 
 SaveManager:BuildConfigSection(Tabs.UISettings)
 ThemeManager:ApplyToTab(Tabs.UISettings)
+
+-- Register UI labels for language support
+-- Tabs and subtabs use SetName callbacks so the button resizes with the new text
+Library:RegisterLabel("Tab_Main",     Tabs.Main.ButtonLabel,         function(t) Tabs.Main:SetName(t) end)
+Library:RegisterLabel("Tab_UI",       Tabs.UISettings.ButtonLabel,   function(t) Tabs.UISettings:SetName(t) end)
+Library:RegisterLabel("SubTab_Elems", SubTabs.Elements.ButtonLabel,  function(t) SubTabs.Elements:SetName(t) end)
+Library:RegisterLabel("SubTab_Feats", SubTabs.Features.ButtonLabel,  function(t) SubTabs.Features:SetName(t) end)
+-- Groupbox titles are full-width so they don't need resizing
+Library:RegisterLabel("Group_Controls",    ElemLeft.TitleLabel)
+Library:RegisterLabel("Group_Colors",      ElemRight.TitleLabel)
+Library:RegisterLabel("Group_Dropdowns",   FeatLeft.TitleLabel)
+Library:RegisterLabel("Group_DepBox",      FeatRight.TitleLabel)
+
+-- Define translations for example elements
+Library:SetupLanguage("es", {
+    Tab_Main           = "Principal",
+    Tab_UI             = "Configuración UI",
+    SubTab_Elems       = "Elementos",
+    SubTab_Feats       = "Funciones",
+    Group_Controls     = "Controles",
+    Group_Colors       = "Selectores de Color",
+    Group_Dropdowns    = "Listas",
+    Group_DepBox       = "Caja de Dependencias",
+    MyToggle           = { Text = "Palanca" },
+    MySlider           = { Text = "Deslizador" },
+    SubSliderA         = { Text = "Ancho" },
+    SubSliderB         = { Text = "Altura" },
+    SubSliderCompactA  = { Text = "X" },
+    SubSliderCompactB  = { Text = "Y" },
+    MyInput            = { Text = "Entrada" },
+    SingleDrop         = { Text = "Selección única",    Values = { "Alpha", "Beta", "Gamma", "Delta" } },
+    SearchDrop         = { Text = "Buscable",           Values = { "Manzana", "Plátano", "Cereza", "Dátil", "Saúco", "Higo", "Uva" } },
+    MultiDrop          = { Text = "Selección múltiple", Values = { "Rojo", "Verde", "Azul", "Amarillo" } },
+    PlayerDrop         = { Text = "Seleccionar jugador" },
+    DepControl         = { Text = "Activar funciones" },
+    DepSlider          = { Text = "Intensidad" },
+    DepDropdown        = { Text = "Modo",               Values = { "Modo A", "Modo B", "Modo C" } },
+    SubDepToggle       = { Text = "Sub función" },
+})
+
+Library:SetupLanguage("fr", {
+    Tab_Main           = "Principal",
+    Tab_UI             = "Paramètres UI",
+    SubTab_Elems       = "Éléments",
+    SubTab_Feats       = "Fonctionnalités",
+    Group_Controls     = "Contrôles",
+    Group_Colors       = "Sélecteurs de couleur",
+    Group_Dropdowns    = "Listes",
+    Group_DepBox       = "Boîte de dépendances",
+    MyToggle           = { Text = "Interrupteur" },
+    MySlider           = { Text = "Curseur" },
+    SubSliderA         = { Text = "Largeur" },
+    SubSliderB         = { Text = "Hauteur" },
+    SubSliderCompactA  = { Text = "X" },
+    SubSliderCompactB  = { Text = "Y" },
+    MyInput            = { Text = "Saisie" },
+    SingleDrop         = { Text = "Sélection unique",    Values = { "Alpha", "Bêta", "Gamma", "Delta" } },
+    SearchDrop         = { Text = "Recherchable",        Values = { "Pomme", "Banane", "Cerise", "Datte", "Sureau", "Figue", "Raisin" } },
+    MultiDrop          = { Text = "Sélection multiple",  Values = { "Rouge", "Vert", "Bleu", "Jaune" } },
+    PlayerDrop         = { Text = "Choisir joueur" },
+    DepControl         = { Text = "Activer fonctions" },
+    DepSlider          = { Text = "Intensité" },
+    DepDropdown        = { Text = "Mode",                Values = { "Mode A", "Mode B", "Mode C" } },
+    SubDepToggle       = { Text = "Sous-fonction" },
+})
+
+-- Language dropdown — added to MenuManager's global MenuTab
+MenuManager.MenuTab:AddDivider()
+MenuManager.MenuTab:AddDropdown("LanguageSelect", {
+    Text = "Language",
+    Values = { "English", "Español", "Français" },
+    Default = 1,
+    Callback = function(val)
+        if val == "Español" then
+            Library:SetLanguage("es")
+        elseif val == "Français" then
+            Library:SetLanguage("fr")
+        else
+            Library:SetLanguage(nil)
+        end
+    end,
+})
