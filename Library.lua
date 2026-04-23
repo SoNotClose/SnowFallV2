@@ -811,7 +811,6 @@ function Library:CreateLabel(Properties, IsHud)
         TextColor3 = Library.FontColor;
         TextSize = 16;
         TextStrokeTransparency = 0;
-        TextTruncate = Enum.TextTruncate.AtEnd;
     })
 
     Library:ApplyTextStroke(_Instance)
@@ -4155,11 +4154,15 @@ do
 
             local Label = Library:CreateLabel({
                 Size = UDim2.new(1, 0, 1, 0);
-                TextSize = 14;
+                TextScaled = true;
                 Text = Button.Text;
                 ZIndex = 6;
                 Parent = Inner;
                 RichText = true;
+            })
+            Library:Create("UITextSizeConstraint", {
+                MaxTextSize = 14;
+                Parent = Label;
             })
 
             Library:Create("UIGradient", {
