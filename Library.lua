@@ -10245,7 +10245,7 @@ end
                     local activeTab = Window.Tabs[activeTabName]
                     if not activeTab then return end
 
-                    local sides = activeTab:GetSides and activeTab:GetSides()
+                    local sides = activeTab.GetSides and activeTab:GetSides()
                     if not sides then return end
 
                     for _, sf in pairs(sides) do
