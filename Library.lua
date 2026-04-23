@@ -258,6 +258,10 @@ local Library = {
     UnloadSignals = {};
     Signals = {};
 
+    -- panic --
+    AllowPanic     = false;
+    PanicFunctions = {};
+
     -- gui --
     ActiveTab = nil;
     ActiveSubTab = nil;
@@ -541,6 +545,9 @@ function Library:_ApplyTabIcon(textLabel, parentFrame, iconName, side, iconColor
     side   = side   or Library.IconSide or "Left"
     zIndex = zIndex or (pcall(function() return textLabel.ZIndex end) and textLabel.ZIndex or 1)
 
+    -- Default icon color: use per-call override, then Library.IconColor, then AccentColor.
+    local _effectiveColor = iconColor or Library.IconColor or Library.AccentColor
+
     local il
     local ok = pcall(function()
         il = Library:Create("ImageLabel", {
@@ -548,7 +555,7 @@ function Library:_ApplyTabIcon(textLabel, parentFrame, iconName, side, iconColor
             Image                  = icon.Url or "";
             ImageRectOffset        = icon.ImageRectOffset or Vector2.zero;
             ImageRectSize          = icon.ImageRectSize  or Vector2.zero;
-            ImageColor3            = iconColor or Library.IconColor;
+            ImageColor3            = _effectiveColor;
             Size                   = UDim2.fromOffset(_ICON_SZ, _ICON_SZ);
             AnchorPoint            = Vector2.new(0, 0.5);
             ZIndex                 = zIndex;
@@ -557,16 +564,16 @@ function Library:_ApplyTabIcon(textLabel, parentFrame, iconName, side, iconColor
     end)
     if not ok or not il then return nil end
 
-    if not iconColor then
-        Library:AddToRegistry(il, { ImageColor3 = "IconColor" })
+    if not iconColor and not Library.IconColor then
+        -- No override → track AccentColor so theme changes update the icon.
+        Library:AddToRegistry(il, { ImageColor3 = "AccentColor" })
     end
 
-    -- Reposition icon and adjust the text label as needed.
-    -- For "Left": the parent was pre-widened by _iconExtra; just shift the label right.
-    --   Do NOT change the size — the original offset already describes the correct right-margin.
-    -- For "Right": anchor icon to the far right; shrink label by the icon+gap so text
-    --   never runs under the icon. Negative offsets are valid Roblox UDim2 values.
-    -- For "Middle": shift label right by half the icon+gap; shrink similarly.
+    -- Reposition the icon and fix up the label.
+    -- Negative UDim2 offsets are valid in Roblox; we use them to account for
+    -- the label position shift so text never overflows the button bounds.
+    -- The parent frame was pre-widened by _iconExtra = _ICON_SZ + _ICON_GAP for
+    -- tab/sub-tab buttons; that extra space is exactly what the icon occupies.
     local lp = textLabel.Position
     local ls = textLabel.Size
 
@@ -574,13 +581,13 @@ function Library:_ApplyTabIcon(textLabel, parentFrame, iconName, side, iconColor
         il.AnchorPoint     = Vector2.new(0, 0.5)
         il.Position        = UDim2.new(lp.X.Scale, lp.X.Offset, 0.5, 0)
         textLabel.Position = UDim2.new(lp.X.Scale, lp.X.Offset + _ICON_SZ + _ICON_GAP, lp.Y.Scale, lp.Y.Offset)
-        -- size intentionally unchanged: parent is wider by _iconExtra so the rendered
-        -- width stays the same once the label is shifted right.
+        -- Shrink by the same amount we shifted, so the right edge stays in place.
+        textLabel.Size     = UDim2.new(ls.X.Scale, ls.X.Offset - _ICON_SZ - _ICON_GAP, ls.Y.Scale, ls.Y.Offset)
 
     elseif side == "Right" then
         il.AnchorPoint = Vector2.new(1, 0.5)
         il.Position    = UDim2.new(1, 0, 0.5, 0)  -- flush to right edge of parent
-        -- shrink label so its right edge leaves room for the icon; negative offset is fine.
+        -- Shrink label so its right edge leaves room for the icon.
         textLabel.Size = UDim2.new(ls.X.Scale, ls.X.Offset - _ICON_SZ - _ICON_GAP, ls.Y.Scale, ls.Y.Offset)
 
     else -- "Middle": icon sits just left of the centred text
@@ -804,6 +811,7 @@ function Library:CreateLabel(Properties, IsHud)
         TextColor3 = Library.FontColor;
         TextSize = 16;
         TextStrokeTransparency = 0;
+        TextTruncate = Enum.TextTruncate.AtEnd;
     })
 
     Library:ApplyTextStroke(_Instance)
@@ -1422,6 +1430,37 @@ function Library:OnUnload(Callback)
     table.insert(Library.UnloadSignals, Callback)
 end
 
+-- Library:Panic() — sets every toggle registered via Library:PanicFuncs() to false.
+-- Safe no-op if PanicFunctions is empty.
+function Library:Panic()
+    if #Library.PanicFunctions == 0 then return end
+    for _, toggle in ipairs(Library.PanicFunctions) do
+        if typeof(toggle) == "table" and toggle.Type == "Toggle" then
+            pcall(function()
+                if toggle.Value ~= false then
+                    toggle:SetValue(false)
+                end
+            end)
+        end
+    end
+end
+
+-- Library:PanicFuncs(names) — register Toggle indices (strings) that Library:Panic() will disable.
+-- Pass a table of index strings matching keys in Library.Toggles.
+-- Automatically sets Library.AllowPanic = true so MenuManager shows the panic section.
+function Library:PanicFuncs(names)
+    assert(typeof(names) == "table", "PanicFuncs: expected a table of toggle index strings")
+    for _, name in ipairs(names) do
+        local toggle = Library.Toggles[name]
+        if toggle and toggle.Type == "Toggle" then
+            table.insert(Library.PanicFunctions, toggle)
+        end
+    end
+    if #Library.PanicFunctions > 0 then
+        Library.AllowPanic = true
+    end
+end
+
 function Library:SetLowercaseMode(Enabled)
     Library.LowercaseMode = Enabled
     for _, Child in ipairs(ScreenGui:GetDescendants()) do
@@ -1507,7 +1546,7 @@ do
         }
 
         if KeyPicker.Mode == "Press" then
-            assert(ParentObj.Type == "Label", "KeyPicker with the mode \"Press\" can be only applied on Labels.")
+            assert(ParentObj.Type == "Label" or ParentObj.Type == "Toggle", "KeyPicker with the mode \"Press\" can be only applied on Labels or Toggles.")
             
             KeyPicker.SyncToggleState = false
             Info.Modes = { "Press" }
@@ -2332,7 +2371,7 @@ do
                 if stop.Frame then
                     stop.Frame.Position = UDim2.new(math.clamp(stop.Time, 0, 1), 0, 0.5, 0)
                     stop.Frame.BackgroundColor3 = stop.Color
-                    stop.Frame.BorderColor3 = (stop == SelectedStop) and Library.AccentColor or Color3.new(0, 0, 0)
+                    stop.Frame.BorderColor3 = (stop == SelectedStop) and Library.AccentColor or Library.OutlineColor
                 end
             end
         end
@@ -2709,7 +2748,7 @@ do
                 )
 
                 Button.InputBegan:Connect(function(Input)
-                    if Input.UserInputType ~= Enum.UserInputType.MouseButton1 or Input.UserInputType ~= Enum.UserInputType.Touch then
+                    if Input.UserInputType ~= Enum.UserInputType.MouseButton1 and Input.UserInputType ~= Enum.UserInputType.Touch then
                         return
                     end
 
@@ -2717,30 +2756,57 @@ do
                 end)
             end
 
-            ContextMenu:AddOption("Copy color", function()
-                Library.ColorClipboard = ColorPicker.Value
-                Library:Notify("Copied color!", 2)
-            end)
-
             ColorPicker.SetValueRGB = function(...) end --// make luau lsp shut up
-            ContextMenu:AddOption("Paste color", function()
-                if not Library.ColorClipboard then
-                    Library:Notify("You have not copied a color!", 2)
-                    return
-                end
 
-                ColorPicker:SetValueRGB(Library.ColorClipboard)
-            end)
-
-            ContextMenu:AddOption("Copy HEX", function()
-                pcall(setclipboard, ColorPicker.Value:ToHex())
-                Library:Notify("Copied hex code to clipboard!", 2)
-            end)
-
-            ContextMenu:AddOption("Copy RGB", function()
-                pcall(setclipboard, table.concat({ math.floor(ColorPicker.Value.R * 255), math.floor(ColorPicker.Value.G * 255), math.floor(ColorPicker.Value.B * 255) }, ", "))
-                Library:Notify("Copied RGB values to clipboard!", 2)
-            end)
+            if Info.AllowGradient then
+                ContextMenu:AddOption("Copy gradient", function()
+                    Library.GradientClipboard = BuildColorSequence()
+                    Library:Notify("Copied gradient!", 2)
+                end)
+                ContextMenu:AddOption("Paste gradient", function()
+                    if not Library.GradientClipboard then
+                        Library:Notify("No gradient copied!", 2)
+                        return
+                    end
+                    ColorPicker:SetValue(Library.GradientClipboard)
+                    RunCallback()
+                    Library:AttemptSave()
+                end)
+                ContextMenu:AddOption("Copy stop HEX", function()
+                    local c = SelectedStop and SelectedStop.Color or ColorPicker.Value
+                    if typeof(c) == "Color3" then
+                        pcall(setclipboard, c:ToHex())
+                        Library:Notify("Copied stop hex!", 2)
+                    end
+                end)
+                ContextMenu:AddOption("Copy stop RGB", function()
+                    local c = SelectedStop and SelectedStop.Color or ColorPicker.Value
+                    if typeof(c) == "Color3" then
+                        pcall(setclipboard, table.concat({ math.floor(c.R * 255), math.floor(c.G * 255), math.floor(c.B * 255) }, ", "))
+                        Library:Notify("Copied stop RGB!", 2)
+                    end
+                end)
+            else
+                ContextMenu:AddOption("Copy color", function()
+                    Library.ColorClipboard = ColorPicker.Value
+                    Library:Notify("Copied color!", 2)
+                end)
+                ContextMenu:AddOption("Paste color", function()
+                    if not Library.ColorClipboard then
+                        Library:Notify("You have not copied a color!", 2)
+                        return
+                    end
+                    ColorPicker:SetValueRGB(Library.ColorClipboard)
+                end)
+                ContextMenu:AddOption("Copy HEX", function()
+                    pcall(setclipboard, ColorPicker.Value:ToHex())
+                    Library:Notify("Copied hex to clipboard!", 2)
+                end)
+                ContextMenu:AddOption("Copy RGB", function()
+                    pcall(setclipboard, table.concat({ math.floor(ColorPicker.Value.R * 255), math.floor(ColorPicker.Value.G * 255), math.floor(ColorPicker.Value.B * 255) }, ", "))
+                    Library:Notify("Copied RGB to clipboard!", 2)
+                end)
+            end
         end
         ColorPicker.ContextMenu = ContextMenu
 
@@ -2974,7 +3040,8 @@ do
         end))
 
         if Info.AllowGradient then
-            PickerFrameOuter.Size = UDim2.fromOffset(230, (Info.Transparency and 271 or 253) + 28)
+            -- Extra 48px: 12px label row + 24px gradient bar + 12px hint row
+            PickerFrameOuter.Size = UDim2.fromOffset(230, (Info.Transparency and 271 or 253) + 48)
 
             GradientDisplayGradient = Library:Create("UIGradient", {
                 Parent = DisplayFrame;
@@ -2983,13 +3050,27 @@ do
             DisplayFrame.Size = UDim2.new(0, 50, 0, 15)
             DisplayFrame.BorderColor3 = Library.OutlineColor
 
-            local GradientBarOuter = Library:Create("Frame", {
-                BorderColor3 = Color3.new(0, 0, 0);
-                Position = UDim2.fromOffset(4, Info.Transparency and 275 or 257);
-                Size = UDim2.new(1, -8, 0, 20);
+            local _gbY = Info.Transparency and 275 or 257
+
+            -- "Gradient" label
+            Library:CreateLabel({
+                Position = UDim2.fromOffset(4, _gbY);
+                Size = UDim2.new(1, -8, 0, 12);
+                TextSize = 12;
+                Text = "Gradient  (click strip to add stop · right-click stop to remove)";
+                TextXAlignment = Enum.TextXAlignment.Left;
                 ZIndex = 17;
                 Parent = PickerFrameInner;
             })
+
+            local GradientBarOuter = Library:Create("Frame", {
+                BorderColor3 = Library.OutlineColor;
+                Position = UDim2.fromOffset(4, _gbY + 13);
+                Size = UDim2.new(1, -8, 0, 24);
+                ZIndex = 17;
+                Parent = PickerFrameInner;
+            })
+            Library:AddToRegistry(GradientBarOuter, { BorderColor3 = "OutlineColor" })
 
             local GradientBarInner = Library:Create("Frame", {
                 BackgroundColor3 = Color3.new(1, 1, 1);
@@ -3008,9 +3089,9 @@ do
                 stop.Frame = Library:Create("Frame", {
                     AnchorPoint = Vector2.new(0.5, 0.5);
                     BackgroundColor3 = stop.Color;
-                    BorderColor3 = (stop == SelectedStop) and Library.AccentColor or Color3.new(0, 0, 0);
+                    BorderColor3 = (stop == SelectedStop) and Library.AccentColor or Library.OutlineColor;
                     Position = UDim2.new(math.clamp(stop.Time, 0, 1), 0, 0.5, 0);
-                    Size = UDim2.new(0, 8, 0, 14);
+                    Size = UDim2.new(0, 10, 1, 4);
                     ZIndex = 21;
                     Active = true;
                     Parent = GradientBarInner;
@@ -7584,30 +7665,14 @@ do
             NotifyInner.BorderColor3 = _outlineCol
         end
 
-        if Side ~= "middle" then
-            -- SideColor must be parented to NotifyInner (not NotifyOuter) because
-            -- NotifyOuter has ClipsDescendants=true which would clip bars positioned outside.
+        -- Side stripe: only for left/right bar sides (vertical accent stripe).
+        -- Top/bottom are handled by the ProgressBar below so they can animate.
+        if Side ~= "middle" and (_barSide == "left" or _barSide == "right") then
             local barProps
-            if _barSide == "top" then
-                barProps = {
-                    AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, 0, 0, 0);
-                    Size = UDim2.new(1, 0, 0, 3);
-                }
-            elseif _barSide == "bottom" then
-                barProps = {
-                    AnchorPoint = Vector2.new(0, 1); Position = UDim2.new(0, 0, 1, 0);
-                    Size = UDim2.new(1, 0, 0, 3);
-                }
-            elseif _barSide == "right" then
-                barProps = {
-                    AnchorPoint = Vector2.new(1, 0); Position = UDim2.new(1, 0, 0, 0);
-                    Size = UDim2.new(0, 3, 1, 0);
-                }
+            if _barSide == "right" then
+                barProps = { AnchorPoint = Vector2.new(1, 0); Position = UDim2.new(1, 0, 0, 0); Size = UDim2.new(0, 3, 1, 0); }
             else
-                barProps = {
-                    AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, 0, 0, 0);
-                    Size = UDim2.new(0, 3, 1, 0);
-                }
+                barProps = { AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, 0, 0, 0); Size = UDim2.new(0, 3, 1, 0); }
             end
             local SideColor = Library:Create("Frame", {
                 AnchorPoint = barProps.AnchorPoint;
@@ -7623,15 +7688,22 @@ do
             end
         end
 
-        local _barValidPos = (_barSide == "top" or _barSide == "bottom" or Side == "middle")
-        local _animatedBar = (Library.NotificationAnimatedBar ~= false) and _barValidPos
+        -- ProgressBar: shown for top/bottom bar sides and middle-positioned notifications.
+        -- Position matches barSide so it appears at the correct edge.
+        -- When NotificationAnimatedBar=true it shrinks (time indicator).
+        -- When false it stays as a static accent stripe at that edge.
+        local _showProgressBar = (_barSide == "top" or _barSide == "bottom" or Side == "middle")
+        local _animatedBar     = (Library.NotificationAnimatedBar ~= false) and _showProgressBar
+        local _pbPos           = (_barSide == "top")
+            and UDim2.new(0, 0, 0, 0)
+            or  UDim2.new(0, 0, 1, -2)
         local ProgressBar = Library:Create("Frame", {
             BackgroundColor3 = _accentCol;
             BorderSizePixel = 0;
-            Position = UDim2.new(0, 0, 1, -2);
+            Position = _pbPos;
             Size = UDim2.new(1, 0, 0, 2);
             ZIndex = 11005;
-            Visible = _barValidPos;  -- always show for valid positions; animation is separate
+            Visible = _showProgressBar;
             Parent = InnerFrame;
         })
         if not _forceColor then
@@ -7737,9 +7809,9 @@ end
 
   Library Properties
   ──────────────────
-  Library.IconColor  : Color3   — global tint applied to all icons (default white)
-                                  Automatically synced through the Registry system
-                                  so theme changes update all existing icons.
+  Library.IconColor  : Color3   — global icon tint override. When nil (default),
+                                  icons follow AccentColor automatically via the
+                                  Registry system so theme changes update them.
   Library.IconSide   : string   — global placement: "Left" | "Right" | "Middle"
                                   "Left"   = icon then text
                                   "Right"  = text then icon
