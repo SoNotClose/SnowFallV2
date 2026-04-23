@@ -25,12 +25,9 @@ as a way to easily build your ui find out more below in features
 -- soon
 
 ## Contributors
---- SnowFall Devs ----
 - silence (termed): Snowfall Main Developer
 - SoNotClose: SnowFall Coder
 - Rellashes: SnowFall bug finder
-
---- LinoriaLib Devs ----
 - Inori: LL Main developer.
 - Wally: Cleaning up verbose code, extending library functionality.
 - mstudio45: Extending library functionality and adding resizing to the menu.
