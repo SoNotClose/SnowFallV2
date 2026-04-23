@@ -1,3 +1,10 @@
+## 4.22.26
+```diff
++ Improved Icons
++ Updated Documentation
++ Pushed out some fixes for bugs
+```
+
 ## 4.20.26
 ```diff
 ! Testing icons with tabs and other elements
