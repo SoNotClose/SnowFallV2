@@ -182,6 +182,50 @@ function MenuManager:BuildMenuSection(Tab)
 
     Library.ToggleKeybind = Library.Options.MenuBind
 
+    if Library.AllowPanic then
+        MenuTab:AddDivider()
+
+        MenuTab:AddToggle("PanicArmed", {
+            Text    = "Panic";
+            Default = false;
+            Callback = function() end;
+        }):AddKeyPicker("PanicBind", {
+            Default  = "Delete";
+            NoUI     = false;
+            Text     = "Panic";
+            Mode     = "Press";
+            Callback = function()
+                if Library.Toggles.PanicArmed and Library.Toggles.PanicArmed.Value then
+                    Library:Panic()
+                end
+            end;
+        })
+    end
+
+    MenuTab:AddDivider()
+
+    MenuTab:AddButton({
+        Text        = "Unload";
+        Func        = function()
+            Library:Unload()
+        end;
+        DoubleClick = true;
+    })
+
+    local PanicButton = MenuTab:AddButton({
+        Text        = "Panic";
+        Func        = function()
+            Library:Panic()
+        end;
+        DoubleClick = true;
+    })
+
+    if #Library.PanicFunctions == 0 then
+        PanicButton:SetDisabled(true)
+    end
+
+    self.PanicButton = PanicButton
+
     NotifTab:AddToggle("NotificationForceColor", {
         Text    = "Force Color";
         Default = Library.NotificationForceColor or false;
@@ -288,6 +332,7 @@ function MenuManager:BuildMenuSection(Tab)
         CursorPlusBottomBar     = { Text = "Barra inferior" };
         CursorPlusOutline       = { Text = "Contorno" };
         CursorPlusOutlineThickness = { Text = "Grosor del contorno" };
+        PanicArmed              = { Text = "Pánico" };
         ControllerSupport       = { Text = "Soporte de mando" };
         ControllerNavigation    = { Text = "Navegación", Values = { "Dpad", "Joystick" } };
         NotificationForceColor  = { Text = "Forzar color" };
@@ -313,6 +358,7 @@ function MenuManager:BuildMenuSection(Tab)
         CursorPlusBottomBar     = { Text = "Barre inférieure" };
         CursorPlusOutline       = { Text = "Contour" };
         CursorPlusOutlineThickness = { Text = "Épaisseur du contour" };
+        PanicArmed              = { Text = "Panique" };
         ControllerSupport       = { Text = "Support manette" };
         ControllerNavigation    = { Text = "Navigation", Values = { "Dpad", "Joystick" } };
         NotificationForceColor  = { Text = "Forcer couleur" };
