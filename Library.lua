@@ -283,6 +283,8 @@ local Library = {
 
     CanDrag = true;
     CantDragForced = false;
+    DragMode   = "Live"; -- "Live" | "Ghost"
+    ResizeMode = "Live"; -- "Live" | "Ghost"
 
     Unloaded = false;
 	ControllerSupport = false;
@@ -850,15 +852,40 @@ function Library:MakeDraggable(Instance, Cutoff, IsMainWindow)
                     return
                 end
 
+                local GhostFrame
+                if Library.DragMode == "Ghost" then
+                    GhostFrame = Library:Create("Frame", {
+                        BackgroundTransparency = 0.75;
+                        BackgroundColor3       = Library.MainColor;
+                        BorderColor3           = Library.AccentColor;
+                        BorderMode             = Enum.BorderMode.Inset;
+                        Position               = Instance.Position;
+                        Size                   = UDim2.fromOffset(Instance.AbsoluteSize.X, Instance.AbsoluteSize.Y);
+                        ZIndex                 = 9999;
+                        Parent                 = Library.ScreenGui;
+                    })
+                    Library:AddToRegistry(GhostFrame, { BackgroundColor3 = "MainColor"; BorderColor3 = "AccentColor" })
+                end
+
                 while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                    Instance.Position = UDim2.new(
+                    local newPos = UDim2.new(
                         0,
                         Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
                         0,
                         Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
                     )
-
+                    if GhostFrame then
+                        GhostFrame.Position = newPos
+                    else
+                        Instance.Position = newPos
+                    end
                     RunService.RenderStepped:Wait()
+                end
+
+                if GhostFrame then
+                    Instance.Position = GhostFrame.Position
+                    pcall(function() Library.RegistryMap[GhostFrame] = nil end)
+                    GhostFrame:Destroy()
                 end
             end
         end)
@@ -991,6 +1018,7 @@ function Library:MakeResizable(Instance, MinSize)
     MinSize = MinSize or Library.MinSize
 
     local OffsetPos
+    local GhostResizeFrame
     Resizer.Parent = Instance
 
     local function FinishResize(Transparency)
@@ -1011,14 +1039,32 @@ function Library:MakeResizable(Instance, MinSize)
             ResizerImage.Position = UDim2.new()
             ResizerImageUICorner.Parent = nil
             ResizerImage.Parent = Library.ScreenGui
+
+            if Library.ResizeMode == "Ghost" then
+                GhostResizeFrame = Library:Create("Frame", {
+                    BackgroundTransparency = 0.75;
+                    BackgroundColor3       = Library.MainColor;
+                    BorderColor3           = Library.AccentColor;
+                    BorderMode             = Enum.BorderMode.Inset;
+                    Position               = Instance.Position;
+                    Size                   = Instance.Size;
+                    ZIndex                 = 9999;
+                    Parent                 = Library.ScreenGui;
+                })
+                Library:AddToRegistry(GhostResizeFrame, { BackgroundColor3 = "MainColor"; BorderColor3 = "AccentColor" })
+            end
         end
     end)
 
     ResizerImage.MouseMoved:Connect(function()
-        if OffsetPos then		
+        if OffsetPos then
             local MousePos = Vector2.new(Mouse.X - OffsetPos.X, Mouse.Y - OffsetPos.Y)
             local FinalSize = Vector2.new(math.clamp(MousePos.X - Instance.AbsolutePosition.X, MinSize.X, math.huge), math.clamp(MousePos.Y - Instance.AbsolutePosition.Y, MinSize.Y, math.huge))
-            Instance.Size = UDim2.fromOffset(FinalSize.X, FinalSize.Y)
+            if GhostResizeFrame then
+                GhostResizeFrame.Size = UDim2.fromOffset(FinalSize.X, FinalSize.Y)
+            else
+                Instance.Size = UDim2.fromOffset(FinalSize.X, FinalSize.Y)
+            end
         end
     end)
 
@@ -1031,6 +1077,12 @@ function Library:MakeResizable(Instance, MinSize)
     end)
 
     ResizerImage.MouseButton1Up:Connect(function()
+        if GhostResizeFrame then
+            Instance.Size = GhostResizeFrame.Size
+            pcall(function() Library.RegistryMap[GhostResizeFrame] = nil end)
+            GhostResizeFrame:Destroy()
+            GhostResizeFrame = nil
+        end
         FinishResize(ResizerImage_HoverTransparency)
     end)
 end
@@ -7668,46 +7720,40 @@ do
             NotifyInner.BorderColor3 = _outlineCol
         end
 
-        -- Side stripe: only for left/right bar sides (vertical accent stripe).
-        -- Top/bottom are handled by the ProgressBar below so they can animate.
-        if Side ~= "middle" and (_barSide == "left" or _barSide == "right") then
-            local barProps
-            if _barSide == "right" then
-                barProps = { AnchorPoint = Vector2.new(1, 0); Position = UDim2.new(1, 0, 0, 0); Size = UDim2.new(0, 3, 1, 0); }
-            else
-                barProps = { AnchorPoint = Vector2.new(0, 0); Position = UDim2.new(0, 0, 0, 0); Size = UDim2.new(0, 3, 1, 0); }
-            end
+        -- Side stripe: vertical accent stripe for left/right bar sides.
+        local _hasSideStripe = (_barSide == "left" or _barSide == "right")
+        if _hasSideStripe then
+            local _sideAnchor = _barSide == "right" and Vector2.new(1, 0) or Vector2.new(0, 0)
+            local _sidePos    = _barSide == "right" and UDim2.new(1, 0, 0, 0) or UDim2.new(0, 0, 0, 0)
             local SideColor = Library:Create("Frame", {
-                AnchorPoint = barProps.AnchorPoint;
-                Position = barProps.Position;
+                AnchorPoint      = _sideAnchor;
+                Position         = _sidePos;
                 BackgroundColor3 = _accentCol;
-                BorderSizePixel = 0;
-                Size = barProps.Size;
-                ZIndex = 11004;
-                Parent = NotifyInner;
+                BorderSizePixel  = 0;
+                Size             = UDim2.new(0, 3, 1, 0);
+                ZIndex           = 11004;
+                Parent           = NotifyOuter;
             })
             if not _forceColor then
                 Library:AddToRegistry(SideColor, { BackgroundColor3 = "AccentColor"; }, true)
             end
         end
 
-        -- ProgressBar: shown for top/bottom bar sides and middle-positioned notifications.
-        -- Position matches barSide so it appears at the correct edge.
-        -- When NotificationAnimatedBar=true it shrinks (time indicator).
-        -- When false it stays as a static accent stripe at that edge.
-        local _showProgressBar = (_barSide == "top" or _barSide == "bottom" or Side == "middle")
+        -- ProgressBar: horizontal stripe for top/bottom bar sides (and middle alignment fallback).
+        -- Static when NotificationAnimatedBar=false, shrinks over time when true.
+        local _showProgressBar = not _hasSideStripe
         local _animatedBar     = (Library.NotificationAnimatedBar ~= false) and _showProgressBar
         local _pbPos           = (_barSide == "top")
             and UDim2.new(0, 0, 0, 0)
             or  UDim2.new(0, 0, 1, -2)
         local ProgressBar = Library:Create("Frame", {
             BackgroundColor3 = _accentCol;
-            BorderSizePixel = 0;
-            Position = _pbPos;
-            Size = UDim2.new(1, 0, 0, 2);
-            ZIndex = 11005;
-            Visible = _showProgressBar;
-            Parent = InnerFrame;
+            BorderSizePixel  = 0;
+            Position         = _pbPos;
+            Size             = UDim2.new(1, 0, 0, 2);
+            ZIndex           = 11005;
+            Visible          = _showProgressBar;
+            Parent           = NotifyOuter;
         })
         if not _forceColor then
             Library:AddToRegistry(ProgressBar, { BackgroundColor3 = "AccentColor" }, true)
@@ -10921,6 +10967,167 @@ Library:GiveSignal(RunService.RenderStepped:Connect(function(Delta)
         Library.CurrentRainbowColor = Color3.fromHSV(Hue, 0.8, 1)
     end
 end))
+
+-- Library:CreateSubMenu(Info) — floating single-column scrollable mini-menu.
+-- Info fields:
+--   Title    String  (default "Menu")
+--   SubTitle String  optional
+--   Width    Number  pixels (default 220)
+--   Height   Number  pixels (default 300)
+--   Position UDim2   initial screen position (default centered)
+--   Visible  Boolean initial visibility (default true)
+function Library:CreateSubMenu(Info)
+    Info = Info or {}
+
+    local width    = Info.Width    or 220
+    local height   = Info.Height   or 300
+    local title    = Info.Title    or "Menu"
+    local subTitle = Info.SubTitle
+    local startPos = Info.Position or UDim2.new(0.5, -math.floor(width / 2), 0.5, -math.floor(height / 2))
+    local visible  = Info.Visible ~= false
+
+    local headerH = 22 + (subTitle and 13 or 0)
+
+    local SubMenu = {
+        Elements  = {};
+        TableType = "SubMenu";
+    }
+
+    -- Outer shell (black 1px border via background)
+    local Outer = Library:Create("Frame", {
+        BackgroundColor3 = Color3.new(0, 0, 0);
+        BorderSizePixel  = 0;
+        Position         = startPos;
+        Size             = UDim2.fromOffset(width, height);
+        Visible          = visible;
+        ZIndex           = 3000;
+        Parent           = ScreenGui;
+    })
+
+    -- Inner panel
+    local Inner = Library:Create("Frame", {
+        BackgroundColor3 = Library.MainColor;
+        BorderColor3     = Library.AccentColor;
+        BorderMode       = Enum.BorderMode.Inset;
+        Position         = UDim2.new(0, 1, 0, 1);
+        Size             = UDim2.new(1, -2, 1, -2);
+        ZIndex           = 3001;
+        Parent           = Outer;
+    })
+    Library:AddToRegistry(Inner, { BackgroundColor3 = "MainColor"; BorderColor3 = "AccentColor" })
+
+    -- Header
+    local HeaderBar = Library:Create("Frame", {
+        BackgroundColor3 = Library.MainColor;
+        BorderSizePixel  = 0;
+        Size             = UDim2.new(1, 0, 0, headerH);
+        ZIndex           = 3002;
+        Parent           = Inner;
+    })
+    Library:AddToRegistry(HeaderBar, { BackgroundColor3 = "MainColor" })
+
+    -- Accent line below header
+    local AccentLine = Library:Create("Frame", {
+        BackgroundColor3 = Library.AccentColor;
+        BorderSizePixel  = 0;
+        Position         = UDim2.new(0, 0, 0, headerH);
+        Size             = UDim2.new(1, 0, 0, 1);
+        ZIndex           = 3003;
+        Parent           = Inner;
+    })
+    Library:AddToRegistry(AccentLine, { BackgroundColor3 = "AccentColor" })
+
+    -- Title label
+    local TitleLabel = Library:CreateLabel({
+        Position       = UDim2.new(0, 6, 0, 3);
+        Size           = UDim2.new(1, -12, 0, 16);
+        Text           = title;
+        TextSize       = 14;
+        TextXAlignment = Enum.TextXAlignment.Left;
+        ZIndex         = 3003;
+        Parent         = HeaderBar;
+    })
+
+    -- SubTitle label
+    if subTitle then
+        Library:CreateLabel({
+            Position       = UDim2.new(0, 6, 0, 19);
+            Size           = UDim2.new(1, -12, 0, 12);
+            Text           = subTitle;
+            TextSize       = 11;
+            TextXAlignment = Enum.TextXAlignment.Left;
+            ZIndex         = 3003;
+            Parent         = HeaderBar;
+        })
+    end
+
+    -- Scrollable content frame
+    local ScrollFrame = Library:Create("ScrollingFrame", {
+        BackgroundTransparency = 1;
+        BorderSizePixel        = 0;
+        Position               = UDim2.new(0, 0, 0, headerH + 1);
+        Size                   = UDim2.new(1, 0, 1, -(headerH + 1));
+        ScrollBarThickness     = 3;
+        ScrollBarImageColor3   = Library.AccentColor;
+        AutomaticCanvasSize    = Enum.AutomaticSize.Y;
+        CanvasSize             = UDim2.new(0, 0, 0, 0);
+        ZIndex                 = 3002;
+        Parent                 = Inner;
+    })
+    Library:AddToRegistry(ScrollFrame, { ScrollBarImageColor3 = "AccentColor" })
+
+    Library:Create("UIListLayout", {
+        FillDirection       = Enum.FillDirection.Vertical;
+        HorizontalAlignment = Enum.HorizontalAlignment.Center;
+        SortOrder           = Enum.SortOrder.LayoutOrder;
+        Parent              = ScrollFrame;
+    })
+
+    -- Make draggable via the header bar
+    Library:MakeDraggableUsingParent(Outer, HeaderBar, headerH)
+
+    SubMenu.Container = ScrollFrame
+    SubMenu.Outer     = Outer
+    SubMenu.Inner     = Inner
+
+    -- No-op Resize: SubMenu has a fixed user-specified size
+    function SubMenu:Resize() end
+
+    function SubMenu:SetVisible(v)
+        Outer.Visible = v
+    end
+
+    function SubMenu:IsVisible()
+        return Outer.Visible
+    end
+
+    function SubMenu:Toggle()
+        Outer.Visible = not Outer.Visible
+    end
+
+    function SubMenu:SetTitle(t)
+        TitleLabel.Text = t
+    end
+
+    function SubMenu:Destroy()
+        pcall(function()
+            for inst in pairs(Library.RegistryMap) do
+                if inst:IsDescendantOf(Outer) then
+                    Library.RegistryMap[inst] = nil
+                end
+            end
+        end)
+        Outer:Destroy()
+    end
+
+    Library:OnUnload(function()
+        pcall(function() SubMenu:Destroy() end)
+    end)
+
+    setmetatable(SubMenu, BaseGroupbox)
+
+    return SubMenu
+end
 
 ----
 if Library.SafeMode then
