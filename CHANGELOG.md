@@ -1,3 +1,10 @@
+## 4.26.26
+```diff
++ Add drag and resize modes
++ Pushed out some fixes for bugs
+! Ongoing issue with setvisibles (working on it now)
+```
+
 ## 4.22.26
 ```diff
 + Improved Icons
