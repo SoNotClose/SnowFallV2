@@ -3091,7 +3091,7 @@ do
         end))
 
         if Info.AllowGradient then
-            -- Extra 48px: 12px label row + 24px gradient bar + 12px hint row
+            -- 48px extra: 12px label + 20px gradient bar + 16px handle track
             PickerFrameOuter.Size = UDim2.fromOffset(230, (Info.Transparency and 271 or 253) + 48)
 
             GradientDisplayGradient = Library:Create("UIGradient", {
@@ -3108,16 +3108,17 @@ do
                 Position = UDim2.fromOffset(4, _gbY);
                 Size = UDim2.new(1, -8, 0, 12);
                 TextSize = 12;
-                Text = "Gradient  (click strip to add stop · right-click stop to remove)";
+                Text = "Gradient  —  click bar to add stop  ·  drag handle to move  ·  right-click to remove";
                 TextXAlignment = Enum.TextXAlignment.Left;
                 ZIndex = 17;
                 Parent = PickerFrameInner;
             })
 
+            -- Gradient preview bar (click to add stop)
             local GradientBarOuter = Library:Create("Frame", {
                 BorderColor3 = Library.OutlineColor;
                 Position = UDim2.fromOffset(4, _gbY + 13);
-                Size = UDim2.new(1, -8, 0, 24);
+                Size = UDim2.new(1, -8, 0, 20);
                 ZIndex = 17;
                 Parent = PickerFrameInner;
             })
@@ -3135,6 +3136,16 @@ do
                 Parent = GradientBarInner;
             })
 
+            -- Handle track (stop handles live here, separate from the preview bar)
+            local HandleTrack = Library:Create("Frame", {
+                BackgroundTransparency = 1;
+                BorderSizePixel = 0;
+                Position = UDim2.fromOffset(4, _gbY + 34);
+                Size = UDim2.new(1, -8, 0, 16);
+                ZIndex = 17;
+                Parent = PickerFrameInner;
+            })
+
             local function CreateStopFrame(stop)
                 if stop.Frame then stop.Frame:Destroy() end
                 stop.Frame = Library:Create("Frame", {
@@ -3142,15 +3153,13 @@ do
                     BackgroundColor3 = stop.Color;
                     BorderColor3 = (stop == SelectedStop) and Library.AccentColor or Library.OutlineColor;
                     Position = UDim2.new(math.clamp(stop.Time, 0, 1), 0, 0.5, 0);
-                    Size = UDim2.new(0, 10, 1, 4);
+                    Size = UDim2.fromOffset(12, 12);
                     ZIndex = 21;
                     Active = true;
-                    Parent = GradientBarInner;
+                    Parent = HandleTrack;
                 })
 
                 stop.Frame.InputBegan:Connect(function(Input)
-                    local barPos = GradientBarInner.AbsolutePosition.X
-                    local barSize = GradientBarInner.AbsoluteSize.X
                     if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
                         SelectedStop = stop
                         ColorPicker:SetHSVFromRGB(stop.Color)
@@ -3202,16 +3211,12 @@ do
                 SelectedStop = GradientStops[1]
             end
 
+            -- Clicking the gradient bar adds a new stop at that position
             GradientBarInner.InputBegan:Connect(function(Input)
                 if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-                    local barPos = GradientBarInner.AbsolutePosition.X
                     local barSize = GradientBarInner.AbsoluteSize.X
                     if barSize <= 0 then return end
-                    local mouseX = Mouse.X - barPos
-                    for _, existingStop in ipairs(GradientStops) do
-                        if math.abs(mouseX - existingStop.Time * barSize) <= 5 then return end
-                    end
-                    local clickTime = math.clamp(mouseX / barSize, 0, 1)
+                    local clickTime = math.clamp((Mouse.X - GradientBarInner.AbsolutePosition.X) / barSize, 0, 1)
                     local stop = { Time = clickTime, Color = SelectedStop and SelectedStop.Color or Color3.new(1, 1, 1) }
                     table.insert(GradientStops, stop)
                     CreateStopFrame(stop)
@@ -4214,6 +4219,7 @@ do
             })
             Library:Create("UITextSizeConstraint", {
                 MaxTextSize = 14;
+                MinTextSize = 11;
                 Parent = Label;
             })
 
