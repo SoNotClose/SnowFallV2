@@ -237,7 +237,7 @@ function SaveManager:SetLibrary(library)
             fullPath = self.Folder .. "/settings/" .. self.SubFolder .. "/" .. name .. '.json'
         end
 
-        local data = { objects = {} }
+        local data = { objects = {}, language = self.Library.CurrentLanguage or nil }
 
         for idx, toggle in next, self.Library.Toggles do
             if not toggle.Type then continue end
@@ -274,11 +274,53 @@ function SaveManager:SetLibrary(library)
         local success, decoded = pcall(HttpService.JSONDecode, HttpService, readfile(file))
         if not success then return false, 'decode error' end
 
-        for _, option in next, decoded.objects do
-            if not option.type then continue end
-            if not self.Parser[option.type] then continue end
-            if self.Ignore[option.idx] then continue end
-            task.spawn(self.Parser[option.type].Load, option.idx, option)
+        local function applyObjects()
+            for _, option in next, decoded.objects do
+                if not option.type then continue end
+                if not self.Parser[option.type] then continue end
+                if self.Ignore[option.idx] then continue end
+                task.spawn(self.Parser[option.type].Load, option.idx, option)
+            end
+        end
+
+        local savedLang = decoded.language
+        local currentLang = self.Library and self.Library.CurrentLanguage
+        local lib = self.Library
+
+        if savedLang and savedLang ~= (currentLang or "") and lib and lib.Window then
+            -- Show a dialog asking the user whether to apply the config's language
+            local langName = savedLang:upper()
+            local dialog = lib.Window:AddDialog("SaveManager_LangPrompt", {
+                Title = "Language Mismatch",
+                Description = string.format(
+                    'This configuration was saved with the language "%s". Would you like to switch to it?',
+                    langName
+                ),
+                AutoDismiss = false,
+                OutsideClickDismiss = false,
+            })
+            dialog:AddFooterButton("Yes", {
+                Title = "Yes — apply language",
+                Variant = "Primary",
+                Callback = function(d)
+                    pcall(lib.SetLanguage, lib, savedLang)
+                    applyObjects()
+                    d:Dismiss()
+                end,
+            })
+            dialog:AddFooterButton("No", {
+                Title = "No — keep current",
+                Variant = "Secondary",
+                Callback = function(d)
+                    applyObjects()
+                    d:Dismiss()
+                end,
+            })
+        else
+            if savedLang and savedLang ~= (currentLang or "") then
+                pcall(lib.SetLanguage, lib, savedLang)
+            end
+            applyObjects()
         end
 
         return true
