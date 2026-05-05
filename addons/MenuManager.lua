@@ -26,12 +26,14 @@ function MenuManager:BuildMenuSection(Tab)
         Default = Library.ShowCustomCursor or false;
         Callback = function(val)
             Library.ShowCustomCursor = val
+            Library:AttemptSave()
         end;
     }):AddColorPicker("CursorColor", {
         Default  = Library.CursorColor or Library.AccentColor;
         Title    = "Cursor Color";
         Callback = function(val)
             Library.CursorColor = val
+            Library:AttemptSave()
         end;
     })
 
@@ -43,6 +45,7 @@ function MenuManager:BuildMenuSection(Tab)
         Default = Library.CursorType or "Mouse";
         Callback = function(val)
             Library.CursorType = val
+            Library:AttemptSave()
         end;
     })
 
@@ -54,6 +57,7 @@ function MenuManager:BuildMenuSection(Tab)
         Min = 1; Max = 20; Rounding = 0;
         Callback = function(val)
             Library.CursorDotScale = val
+            Library:AttemptSave()
         end;
     })
 
@@ -62,6 +66,7 @@ function MenuManager:BuildMenuSection(Tab)
         Default = Library.CursorDotOutline or false;
         Callback = function(val)
             Library.CursorDotOutline = val
+            Library:AttemptSave()
         end;
     })
 
@@ -74,6 +79,7 @@ function MenuManager:BuildMenuSection(Tab)
         Suffix   = "px";
         Callback = function(val)
             Library.CursorDotOutlineThickness = val
+            Library:AttemptSave()
         end;
     })
 
@@ -89,6 +95,7 @@ function MenuManager:BuildMenuSection(Tab)
         Suffix   = "px";
         Callback = function(val)
             Library.CursorPlusSpacing = val
+            Library:AttemptSave()
         end;
     })
 
@@ -97,6 +104,7 @@ function MenuManager:BuildMenuSection(Tab)
         Default = Library.CursorPlusTopBar ~= false;
         Callback = function(val)
             Library.CursorPlusTopBar = val
+            Library:AttemptSave()
         end;
     })
 
@@ -105,6 +113,7 @@ function MenuManager:BuildMenuSection(Tab)
         Default = Library.CursorPlusRightBar ~= false;
         Callback = function(val)
             Library.CursorPlusRightBar = val
+            Library:AttemptSave()
         end;
     })
 
@@ -113,6 +122,7 @@ function MenuManager:BuildMenuSection(Tab)
         Default = Library.CursorPlusLeftBar ~= false;
         Callback = function(val)
             Library.CursorPlusLeftBar = val
+            Library:AttemptSave()
         end;
     })
 
@@ -121,6 +131,7 @@ function MenuManager:BuildMenuSection(Tab)
         Default = Library.CursorPlusBottomBar ~= false;
         Callback = function(val)
             Library.CursorPlusBottomBar = val
+            Library:AttemptSave()
         end;
     })
 
@@ -129,6 +140,7 @@ function MenuManager:BuildMenuSection(Tab)
         Default = Library.CursorPlusOutline or false;
         Callback = function(val)
             Library.CursorPlusOutline = val
+            Library:AttemptSave()
         end;
     })
 
@@ -141,6 +153,7 @@ function MenuManager:BuildMenuSection(Tab)
         Suffix   = "px";
         Callback = function(val)
             Library.CursorPlusOutlineThickness = val
+            Library:AttemptSave()
         end;
     })
 
@@ -167,6 +180,7 @@ function MenuManager:BuildMenuSection(Tab)
         Default = Library.ControllerNavType or "Dpad";
         Callback = function(val)
             Library.ControllerNavType = val
+            Library:AttemptSave()
         end;
     })
 
@@ -180,7 +194,9 @@ function MenuManager:BuildMenuSection(Tab)
         Text    = "Menu Bind";
     })
 
-    Library.ToggleKeybind = Library.Options.MenuBind
+    if Library.Options.MenuBind then
+        Library.ToggleKeybind = Library.Options.MenuBind
+    end
 
     if Library.AllowPanic then
         MenuTab:AddDivider()
