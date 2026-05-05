@@ -304,7 +304,7 @@ local Library = {
     ControllerNavSensitivity = 5;
 
     -- icons --
-    IconColor = Color3.fromRGB(255, 255, 255); -- default icon tint (nil = follow FontColor)
+    IconColor = nil; -- nil = follow AccentColor; set a Color3 to override globally
     IconSide  = "Left";                        -- global default: "Left" | "Right" | "Middle"
 
     -- tab switch animations --
@@ -2451,6 +2451,7 @@ do
         end
 
         function ColorPicker:SetHSVFromRGB(Color)
+            if typeof(Color) ~= "Color3" then return end
             local H, S, V = Color:ToHSV()
 
             ColorPicker.Hue = H
@@ -3103,16 +3104,48 @@ do
 
             local _gbY = Info.Transparency and 275 or 257
 
-            -- "Gradient" label
-            Library:CreateLabel({
+            -- "Gradient" label row (label + "+" add-stop button)
+            local GradientLabelRow = Library:Create("Frame", {
+                BackgroundTransparency = 1;
                 Position = UDim2.fromOffset(4, _gbY);
                 Size = UDim2.new(1, -8, 0, 12);
-                TextSize = 12;
-                Text = "Gradient  —  click bar to add stop  ·  drag handle to move  ·  right-click to remove";
-                TextXAlignment = Enum.TextXAlignment.Left;
                 ZIndex = 17;
                 Parent = PickerFrameInner;
             })
+
+            Library:CreateLabel({
+                Size = UDim2.new(1, -18, 1, 0);
+                TextSize = 12;
+                Text = "Gradient  —  click bar to select  ·  drag handle to move  ·  right-click handle to remove";
+                TextXAlignment = Enum.TextXAlignment.Left;
+                TextTruncate = Enum.TextTruncate.AtEnd;
+                ZIndex = 17;
+                Parent = GradientLabelRow;
+            })
+
+            -- small "+" button to add a new stop at the midpoint of the selected stop range
+            local AddStopBtn = Library:Create("TextButton", {
+                AnchorPoint = Vector2.new(1, 0.5);
+                BackgroundColor3 = Library.MainColor;
+                BorderColor3 = Library.OutlineColor;
+                BorderMode = Enum.BorderMode.Inset;
+                Position = UDim2.new(1, 0, 0.5, 0);
+                Size = UDim2.fromOffset(16, 12);
+                Text = "+";
+                TextColor3 = Library.FontColor;
+                TextSize = 13;
+                ZIndex = 18;
+                Parent = GradientLabelRow;
+            })
+            Library:AddToRegistry(AddStopBtn, {
+                BackgroundColor3 = "MainColor";
+                BorderColor3 = "OutlineColor";
+                TextColor3 = "FontColor";
+            })
+            Library:OnHighlight(AddStopBtn, AddStopBtn,
+                { BorderColor3 = "AccentColor" },
+                { BorderColor3 = "OutlineColor" }
+            )
 
             -- Gradient preview bar (click to add stop)
             local GradientBarOuter = Library:Create("Frame", {
@@ -3153,7 +3186,7 @@ do
                     BackgroundColor3 = stop.Color;
                     BorderColor3 = (stop == SelectedStop) and Library.AccentColor or Library.OutlineColor;
                     Position = UDim2.new(math.clamp(stop.Time, 0, 1), 0, 0.5, 0);
-                    Size = UDim2.fromOffset(12, 12);
+                    Size = UDim2.fromOffset(14, 14);
                     ZIndex = 21;
                     Active = true;
                     Parent = HandleTrack;
@@ -3189,7 +3222,9 @@ do
                         if SelectedStop == stop then
                             SelectedStop = GradientStops[math.min(idx, #GradientStops)]
                         end
-                        ColorPicker:SetHSVFromRGB(SelectedStop.Color)
+                        if SelectedStop then
+                            ColorPicker:SetHSVFromRGB(SelectedStop.Color)
+                        end
                         ColorPicker:Display()
                         RefreshGradientVisuals()
                         RunCallback()
@@ -3211,20 +3246,57 @@ do
                 SelectedStop = GradientStops[1]
             end
 
-            -- Clicking the gradient bar adds a new stop at that position
+            -- Clicking the gradient bar selects the nearest stop (no accidental creation)
             GradientBarInner.InputBegan:Connect(function(Input)
-                if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-                    local barSize = GradientBarInner.AbsoluteSize.X
-                    if barSize <= 0 then return end
-                    local clickTime = math.clamp((Mouse.X - GradientBarInner.AbsolutePosition.X) / barSize, 0, 1)
-                    local stop = { Time = clickTime, Color = SelectedStop and SelectedStop.Color or Color3.new(1, 1, 1) }
-                    table.insert(GradientStops, stop)
-                    CreateStopFrame(stop)
-                    SelectedStop = stop
-                    RefreshGradientVisuals()
-                    RunCallback()
-                    Library:AttemptSave()
+                if Input.UserInputType ~= Enum.UserInputType.MouseButton1 and Input.UserInputType ~= Enum.UserInputType.Touch then return end
+                local barSize = GradientBarInner.AbsoluteSize.X
+                if barSize <= 0 or #GradientStops == 0 then return end
+                local clickTime = math.clamp((Mouse.X - GradientBarInner.AbsolutePosition.X) / barSize, 0, 1)
+                local nearest, nearestDist = GradientStops[1], math.huge
+                for _, s in ipairs(GradientStops) do
+                    local d = math.abs(s.Time - clickTime)
+                    if d < nearestDist then nearest, nearestDist = s, d end
                 end
+                if nearest then
+                    SelectedStop = nearest
+                    ColorPicker:SetHSVFromRGB(nearest.Color)
+                    ColorPicker:Display()
+                    if not PickerFrameOuter.Visible then ColorPicker:Show() end
+                    RefreshGradientVisuals()
+                end
+            end)
+
+            -- "+" button: insert a new stop at the midpoint between selected stop and the next one
+            AddStopBtn.MouseButton1Click:Connect(function()
+                if #GradientStops == 0 then return end
+                local insertTime
+                if SelectedStop then
+                    -- find the gap to the right of SelectedStop; fall back to gap on the left
+                    local sortedStops = {}
+                    for _, s in ipairs(GradientStops) do table.insert(sortedStops, s) end
+                    table.sort(sortedStops, function(a, b) return a.Time < b.Time end)
+                    local selIdx = table.find(sortedStops, SelectedStop)
+                    if selIdx and selIdx < #sortedStops then
+                        insertTime = (sortedStops[selIdx].Time + sortedStops[selIdx + 1].Time) / 2
+                    elseif selIdx and selIdx > 1 then
+                        insertTime = (sortedStops[selIdx - 1].Time + sortedStops[selIdx].Time) / 2
+                    else
+                        insertTime = 0.5
+                    end
+                else
+                    insertTime = 0.5
+                end
+                local newColor = SelectedStop and SelectedStop.Color or Color3.new(1, 1, 1)
+                local newStop = { Time = insertTime, Color = newColor }
+                table.insert(GradientStops, newStop)
+                CreateStopFrame(newStop)
+                SelectedStop = newStop
+                ColorPicker:SetHSVFromRGB(newStop.Color)
+                ColorPicker:Display()
+                if not PickerFrameOuter.Visible then ColorPicker:Show() end
+                RefreshGradientVisuals()
+                RunCallback()
+                Library:AttemptSave()
             end)
 
             InitStopsFromColorSequence(GradientDefault)
@@ -4929,6 +5001,11 @@ do
 
         table.insert(Groupbox.Elements, Toggle)
         Toggles[Idx] = Toggle
+
+        if Info.RegisterPanic then
+            table.insert(Library.PanicFunctions, Toggle)
+            Library.AllowPanic = true
+        end
 
         Library:UpdateDependencyBoxes()
         Library:UpdateDependencyGroupboxes()
@@ -8949,6 +9026,7 @@ do
             Position = UDim2.new(0, 7, 0, 7);
             Size = UDim2.new(0.5, -10, 1, -14);
             CanvasSize = UDim2.new(0, 0, 0, 0);
+            AutomaticCanvasSize = Enum.AutomaticSize.Y;
             BottomImage = "";
             TopImage = "";
             ScrollBarThickness = 0;
@@ -8962,6 +9040,7 @@ do
             Position = UDim2.new(0.5, 5, 0, 7);
             Size = UDim2.new(0.5, -10, 1, -14);
             CanvasSize = UDim2.new(0, 0, 0, 0);
+            AutomaticCanvasSize = Enum.AutomaticSize.Y;
             BottomImage = "";
             TopImage = "";
             ScrollBarThickness = 0;
@@ -9019,11 +9098,6 @@ do
             end)
         end
 
-        for _, Side in next, { LeftSide, RightSide } do
-            Side:WaitForChild("UIListLayout"):GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                Side.CanvasSize = UDim2.fromOffset(0, Side.UIListLayout.AbsoluteContentSize.Y)
-            end)
-        end
 
         function Tab:Resize()
             -- when tab has both direct elements + subtab nav bar, shift LeftSide/RightSide down by 22px
@@ -9670,6 +9744,7 @@ end
                 Position = UDim2.new(0, 7, 0, 7);
                 Size = UDim2.new(0.5, -10, 1, -14);
                 CanvasSize = UDim2.fromOffset(0, 0);
+                AutomaticCanvasSize = Enum.AutomaticSize.Y;
                 BottomImage = ""; TopImage = "";
                 ScrollBarThickness = 0;
                 ZIndex = 2;
@@ -9681,6 +9756,7 @@ end
                 Position = UDim2.new(0.5, 5, 0, 7);
                 Size = UDim2.new(0.5, -10, 1, -14);
                 CanvasSize = UDim2.fromOffset(0, 0);
+                AutomaticCanvasSize = Enum.AutomaticSize.Y;
                 BottomImage = ""; TopImage = "";
                 ScrollBarThickness = 0;
                 ZIndex = 2;
@@ -9694,9 +9770,6 @@ end
                     HorizontalAlignment = Enum.HorizontalAlignment.Center;
                     Parent = Side;
                 })
-                Side:WaitForChild("UIListLayout"):GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                    Side.CanvasSize = UDim2.fromOffset(0, Side.UIListLayout.AbsoluteContentSize.Y)
-                end)
             end
 
             SubTab.LeftSideFrame = SubLeft
