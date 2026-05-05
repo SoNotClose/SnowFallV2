@@ -1,3 +1,10 @@
+## 5.5.26
+```diff
++ Overhualed Library
++ Fixed gradient pickers hopefully
++ Improved Savemanager
+```
+
 ## 4.26.26
 ```diff
 + Add drag and resize modes
