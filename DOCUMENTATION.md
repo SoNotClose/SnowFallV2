@@ -1,8 +1,69 @@
-## SNOWFALLS DOCUMENTATION
+# SnowFall V2 — Complete Reference
+
+> **SnowFall V2** is a fully-featured Roblox Luau UI library designed for script hubs and exploits.  
+> It provides tabs, groupboxes, a rich element set, themes, config saving, panic, and a language system —  
+> all in a clean, consistent API.
 
 ---
 
-### Setup
+## Table of Contents
+
+| # | Section |
+|---|---------|
+| 1 | [Quick Start](#quick-start) |
+| 2 | [Full Setup](#full-setup) |
+| 3 | [Window](#window) |
+| 4 | [Library Properties](#library-properties) |
+| 5 | [Library Methods](#library-methods) |
+| 6 | [Panic System](#panic-system) |
+| 7 | [Language System](#language-system) |
+| 8 | [Tabs & SubTabs](#tabs--subtabs) |
+| 9 | [Groupboxes & Tabboxes](#groupboxes--tabboxes) |
+| 10 | [Elements](#elements) |
+| 11 | [Addons (Chaining)](#addons-chaining) |
+| 12 | [DependencyBox](#dependencybox) |
+| 13 | [Notifications](#notifications) |
+| 14 | [Dialogs](#dialogs) |
+| 15 | [ThemeManager](#thememanager) |
+| 16 | [SaveManager](#savemanager) |
+| 17 | [MenuManager](#menumanager) |
+| 18 | [Icons](#icons) |
+| 19 | [Tooltips](#tooltips) |
+| 20 | [Events & Hooks](#events--hooks) |
+
+---
+
+## Quick Start
+
+The bare minimum to get a working UI:
+
+```lua
+local repo    = "https://raw.githubusercontent.com/SoNotClose/SnowFallV2/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+
+local Window = Library:CreateWindow({
+    Title    = "My Script",
+    Center   = true,
+    AutoShow = true,
+})
+
+local Tab   = Window:AddTab("Main")
+local Group = Tab:AddLeftGroupbox("Settings")
+
+Group:AddToggle("MyFeature", {
+    Text    = "Enable Feature",
+    Default = false,
+    Callback = function(val)
+        print("Feature:", val)
+    end,
+})
+```
+
+---
+
+## Full Setup
+
+A complete setup that includes all optional addons:
 
 ```lua
 local repo         = "https://raw.githubusercontent.com/SoNotClose/SnowFallV2/main/"
@@ -13,344 +74,719 @@ local SaveManager  = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))(
 
 local Options = Library.Options
 local Toggles = Library.Toggles
-```
 
----
-
-### Window
-
-The Window is the root container for your entire UI.
-
-**Args**
-- `Title` String — main title in the header
-- `SubTitle` String *(optional)* — smaller text below the title, same side
-- `GameTitle` String *(optional)* — secondary label on the opposite side (e.g. game name)
-- `TitleSide` String — `"Left"` (default) | `"Right"` | `"Middle"`
-- `GameSide` String — `"Right"` (default) | `"Left"` | `"Middle"`
-- `Center` Boolean — spawn in screen center
-- `AutoShow` Boolean — show immediately on creation
-- `Resizable` Boolean — allow user to resize
-- `Size` UDim2 *(optional)* — starting size (default 550×600)
-- `Position` UDim2 *(optional)* — starting position (overridden by Center)
-- `AnchorPoint` Vector2 *(optional)*
-- `NotifySide` String — `"Left"` | `"Right"` | `"Middle"`
-- `TabPadding` Number — px spacing between tab buttons
-- `MenuFadeTime` Number — fade duration in seconds
-- `ShowCustomCursor` Boolean
-- `UnlockMouseWhileOpen` Boolean
-- `BackgroundImage` String *(optional)* — asset ID
-
-**Usage**
-```lua
+-- ── 1. Create the window ──────────────────────────────────────────────────────
 local Window = Library:CreateWindow({
     Title        = "My Script",
     SubTitle     = "v1.0",
     GameTitle    = "Game Name",
+    Center       = true,
+    AutoShow     = true,
+    Resizable    = true,
+    MenuFadeTime = 0.2,
+    ShowCustomCursor     = true,
+    UnlockMouseWhileOpen = true,
+})
+
+-- ── 2. Build tabs ─────────────────────────────────────────────────────────────
+local Tabs = {
+    Main      = Window:AddTab("Main",      "home"),
+    Combat    = Window:AddTab("Combat",    "sword"),
+    Visuals   = Window:AddTab("Visuals",   "eye"),
+    Misc      = Window:AddTab("Misc",      "settings"),
+    UISettings = Window:AddTab("UI Settings"),
+}
+
+-- ── 3. Wire up addons ─────────────────────────────────────────────────────────
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+MenuManager:SetLibrary(Library)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetSubFolder("MyScript")   -- saves configs in MyScript/
+
+ThemeManager:SetFolder("MyScript")
+ThemeManager:ApplyTheme("Default")
+
+-- ── 4. Build UI sections ──────────────────────────────────────────────────────
+local MainLeft  = Tabs.Main:AddLeftGroupbox("Features")
+local MainRight = Tabs.Main:AddRightGroupbox("Config")
+
+-- Your elements go here ...
+
+-- ── 5. Build addon config/menu tabs ──────────────────────────────────────────
+ThemeManager:BuildThemeSection(Tabs.UISettings)
+SaveManager:BuildConfigSection(Tabs.UISettings)
+MenuManager:BuildMenuSection(Tabs.UISettings)
+```
+
+> **Note:** Always call `SaveManager:BuildConfigSection` and `MenuManager:BuildMenuSection`
+> **after** building all your game-specific tabs, so auto-save hooks fire for all registered
+> toggles and options.
+
+---
+
+## Window
+
+`Library:CreateWindow(Info)` — creates the root UI frame. Returns a `Window` object.
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `Title` | `string` | `""` | Main title shown in the header bar |
+| `SubTitle` | `string` | `nil` | Smaller secondary text on the same side as Title |
+| `GameTitle` | `string` | `nil` | Secondary label on the opposite side (e.g. game name) |
+| `TitleSide` | `"Left"/"Right"/"Middle"` | `"Left"` | Which side Title+SubTitle anchor to |
+| `GameSide` | `"Left"/"Right"/"Middle"` | `"Right"` | Which side GameTitle anchors to |
+| `Center` | `boolean` | `false` | Spawn in screen center (overrides Position) |
+| `AutoShow` | `boolean` | `false` | Show the window immediately without a keybind |
+| `Resizable` | `boolean` | `false` | Allow the user to drag-resize the window |
+| `AllowPanic` | `boolean` | `false` | Enable the Panic toggle section in MenuManager |
+| `Size` | `UDim2` | `UDim2.new(0,550,0,600)` | Initial window size |
+| `Position` | `UDim2` | `nil` | Initial position (ignored if `Center = true`) |
+| `AnchorPoint` | `Vector2` | `nil` | Anchor point for Position |
+| `NotifySide` | `"Left"/"Right"/"Middle"` | `"Left"` | Default side for notifications |
+| `TabPadding` | `number` | `8` | Pixel gap between tab buttons |
+| `MenuFadeTime` | `number` | `0.2` | Open/close fade duration in seconds |
+| `ShowCustomCursor` | `boolean` | `true` | Enable the custom Drawing cursor |
+| `UnlockMouseWhileOpen` | `boolean` | `false` | Unlock mouse from Roblox lock while menu is open |
+| `BackgroundImage` | `string` | `nil` | Asset ID string for a background image |
+| `DragMode` | `string` | `"Window"` | Drag behaviour: `"Window"` or `"TopBar"` |
+
+### Methods
+
+```lua
+Window:SetWindowTitle("New Title")
+Window:SetBackgroundImage("rbxassetid://12345678")
+
+-- Add a dialog popup (see Dialogs section)
+local dialog = Window:AddDialog("MyDialog", { ... })
+```
+
+### Example
+
+```lua
+local Window = Library:CreateWindow({
+    Title        = "SnowFall",
+    SubTitle     = "by me",
+    GameTitle    = "Blox Fruits",
     TitleSide    = "Left",
     GameSide     = "Right",
     Center       = true,
     AutoShow     = true,
     Resizable    = true,
-    NotifySide   = "Right",
-    TabPadding   = 8,
-    MenuFadeTime = 0.2,
+    AllowPanic   = true,
+    MenuFadeTime = 0.15,
     ShowCustomCursor     = true,
     UnlockMouseWhileOpen = true,
+    Size         = UDim2.fromOffset(600, 650),
 })
 ```
 
-**Methods**
-```lua
-Window:SetWindowTitle("New Title")
-Window:SetBackgroundImage("rbxassetid://12345678")
-```
+---
+
+## Library Properties
+
+Set directly on `Library` before or after `CreateWindow`. Changes take effect immediately.
+
+### Colors & Theming
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Library.AccentColor` | `Color3` | `Color3.fromRGB(103,93,190)` | Primary accent — used by highlights, borders, icons |
+| `Library.BackgroundColor` | `Color3` | dark grey | Window background |
+| `Library.MainColor` | `Color3` | mid grey | Element backgrounds |
+| `Library.OutlineColor` | `Color3` | dark outline | Element borders |
+| `Library.FontColor` | `Color3` | white | All text |
+| `Library.Font` | `Enum.Font` | `GothamSemibold` | Global font |
+| `Library.IconColor` | `Color3\|nil` | `nil` | Icon tint (`nil` = follow AccentColor per icon) |
+
+> **Tip — icon color priority:** The effective color for any tab icon is resolved in order:
+> 1. The `IconColor` argument passed directly to the element (per-element override)
+> 2. `Library.IconColor` (global override, only if not `nil`)
+> 3. `Library.AccentColor` (automatic fallback)
+>
+> Leave `Library.IconColor = nil` (the default) to let all icons follow your accent colour
+> automatically, while still allowing individual elements to pin their own colour.
+
+### Custom Cursor
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Library.ShowCustomCursor` | `boolean` | `true` | Enable the custom Drawing-based cursor |
+| `Library.CursorType` | `string` | `"Mouse"` | `"Mouse"` / `"Dot"` / `"Plus"` |
+| `Library.CursorColor` | `Color3\|nil` | `nil` | Cursor colour (`nil` = follow AccentColor) |
+| `Library.CursorDotScale` | `number` | `5` | Dot radius in pixels |
+| `Library.CursorDotOutline` | `boolean` | `false` | Draw outline ring around dot |
+| `Library.CursorDotOutlineThickness` | `number` | `1` | Dot outline thickness px |
+| `Library.CursorPlusSpacing` | `number` | `2` | Gap from center to each bar |
+| `Library.CursorPlusTopBar` | `boolean` | `true` | Show top arm of plus cursor |
+| `Library.CursorPlusRightBar` | `boolean` | `true` | Show right arm |
+| `Library.CursorPlusLeftBar` | `boolean` | `true` | Show left arm |
+| `Library.CursorPlusBottomBar` | `boolean` | `true` | Show bottom arm |
+| `Library.CursorPlusOutline` | `boolean` | `false` | Draw outline behind each bar |
+| `Library.CursorPlusOutlineThickness` | `number` | `1` | Plus outline thickness px |
+
+### Controller
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Library.ControllerSupport` | `boolean` | `false` | Enable gamepad navigation |
+| `Library.ControllerNavType` | `string` | `"Dpad"` | `"Dpad"` or `"Joystick"` |
+| `Library.ControllerNavSensitivity` | `number` | `5` | Joystick navigation sensitivity |
+
+### Tab Sizing
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Library.IgnoreTabSizes` | `boolean` | `false` | Force all tab buttons to the same width |
+| `Library.TabSize` | `number` | `5` | Width multiplier when `IgnoreTabSizes = true` |
+| `Library.IgnoreLimit` | `number` | `6` | Tab count before the tab bar scrolls |
+| `Library.IgnoreSubTabSizes` | `boolean` | `false` | Force uniform sub-tab button widths |
+
+### Tab Animations
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Library.TabSwitchAnimation` | `string` | `"None"` | `"None"` / `"Fade"` / `"SlideUp"` / `"SlideDown"` / `"SlideLeft"` / `"SlideRight"` / `"Scale"` / `"Bounce"` / `"Elastic"` |
+| `Library.TabSwitchAnimationTime` | `number` | `0.18` | Animation duration in seconds |
+
+### Notifications
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Library.NotificationPositionX` | `number` | `50` | Screen X % (0–100) |
+| `Library.NotificationPositionY` | `number` | `50` | Screen Y % (0–100) |
+| `Library.NotificationAlignment` | `string` | `"Center"` | `"Left"` / `"Right"` / `"Center"` |
+| `Library.NotificationBarSide` | `string` | `"Left"` | `"Left"` / `"Top"` / `"Right"` / `"Bottom"` |
+| `Library.NotificationAnimatedBar` | `boolean` | `true` | Animated countdown bar |
+| `Library.NotificationForceColor` | `boolean` | `false` | Force custom notification colors |
+| `Library.NotificationAccentColor` | `Color3` | `Color3.fromRGB(120,120,200)` | Notification accent |
+| `Library.NotificationOutlineColor` | `Color3` | `Color3.fromRGB(60,60,80)` | Notification outline |
+| `Library.NotificationFontColor` | `Color3` | white | Notification text |
+| `Library.LimitNotifications` | `boolean` | `false` | Cap visible notifications |
+| `Library.MaximumNotifications` | `number` | `5` | Max visible when `LimitNotifications = true` |
+
+### Panic System
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Library.AllowPanic` | `boolean` | `false` | Show Panic UI in MenuManager. Set automatically by `RegisterPanic = true` or `Library:PanicFuncs()` |
+| `Library.PanicFunctions` | `table` | `{}` | Read-only list of Toggle objects that `Library:Panic()` will disable |
+
+### Misc
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Library.LowercaseMode` | `boolean` | `false` | Convert all labels to lowercase |
+| `Library.SafeMode` | `boolean` | `false` | Wrap callbacks in pcall |
+| `Library.NotifyOnError` | `boolean` | `false` | Show a notification on `SafeCallback` errors |
+| `Library.CurrentLanguage` | `string\|nil` | `nil` | *(read-only)* Active language code, e.g. `"es"` |
+| `Library.ActiveTab` | `string` | — | *(read-only)* Currently visible tab name |
+| `Library.Toggled` | `boolean` | — | *(read-only)* Whether the menu is currently open |
+| `Library.Unloaded` | `boolean` | — | *(read-only)* Set to `true` after `Library:Unload()` |
 
 ---
 
-### Library Properties
+## Library Methods
 
-Set directly on `Library` before or after `CreateWindow`.
-
-**Cursor**
-- `Library.ShowCustomCursor` Boolean — show custom cursor (default `true`)
-- `Library.CursorType` String — `"Mouse"` | `"Dot"` | `"Plus"`
-- `Library.CursorColor` Color3 — cursor color (`nil` = follow AccentColor automatically)
-- `Library.IconColor` Color3 — icon tint (`nil` = follow AccentColor automatically)
-- `Library.CursorDotScale` Number — dot radius in pixels (default `5`)
-- `Library.CursorDotOutline` Boolean
-- `Library.CursorDotOutlineThickness` Number (default `1`)
-- `Library.CursorPlusSpacing` Number — gap from center in px (default `2`)
-- `Library.CursorPlusTopBar` Boolean (default `true`)
-- `Library.CursorPlusRightBar` Boolean (default `true`)
-- `Library.CursorPlusLeftBar` Boolean (default `true`)
-- `Library.CursorPlusBottomBar` Boolean (default `true`)
-- `Library.CursorPlusOutline` Boolean
-- `Library.CursorPlusOutlineThickness` Number (default `1`)
-
-**Controller**
-- `Library.ControllerSupport` Boolean (default `false`)
-- `Library.ControllerNavType` String — `"Dpad"` | `"Joystick"`
-- `Library.ControllerNavSensitivity` Number (default `5`)
-
-**Tab Sizing**
-- `Library.IgnoreTabSizes` Boolean — uniform tab widths (default `false`)
-- `Library.TabSize` Number — min width multiplier when IgnoreTabSizes is true (default `5`)
-- `Library.IgnoreLimit` Number — tabs before scrolling (default `6`)
-- `Library.IgnoreSubTabSizes` Boolean — uniform sub-tab widths (default `false`)
-
-**Notifications**
-- `Library.NotificationPositionX` Number 0–100 (default `50`)
-- `Library.NotificationPositionY` Number 0–100 (default `50`)
-- `Library.NotificationAlignment` String — `"Left"` | `"Right"` | `"Center"`
-- `Library.NotificationBarSide` String — `"Left"` | `"Top"` | `"Right"` | `"Bottom"`
-- `Library.NotificationAnimatedBar` Boolean — animated progress bar (top/bottom only, default `true`)
-- `Library.NotificationForceColor` Boolean
-- `Library.NotificationAccentColor` Color3
-- `Library.NotificationOutlineColor` Color3
-- `Library.NotificationFontColor` Color3
-- `Library.LimitNotifications` Boolean
-- `Library.MaximumNotifications` Number
-
-**Panic System**
-- `Library.AllowPanic` Boolean — when `true`, MenuManager shows the Panic toggle+keybind section (default `false`). Set automatically by `Library:PanicFuncs()` when at least one valid toggle is registered.
-- `Library.PanicFunctions` Table *(read-only)* — list of Toggle objects registered for panic. Populated by `Library:PanicFuncs()`.
-
-**Misc**
-- `Library.LowercaseMode` Boolean
-- `Library.MenuMark` Boolean — draggable name watermark
-- `Library.SafeMode` Boolean
-- `Library.ActiveTab` String *(read-only)* — name of the currently visible tab
-- `Library.ActiveSubTab` String *(read-only)* — name of the currently visible subtab
-
-**Usage**
-```lua
-Library.ControllerSupport = true
-Library.ControllerNavType = "Dpad"
-Library.CursorType        = "Plus"
-Library.LowercaseMode     = true
-Library.AllowPanic        = true  -- or set via Library:PanicFuncs()
-```
-
----
-
-### Library Methods
+### UI Control
 
 ```lua
--- Toggle the UI open/closed (or force a state)
-Library:Toggle()          -- flip
+-- Toggle the menu open/closed
+Library:Toggle()          -- flip current state
 Library:Toggle(true)      -- force open
 Library:Toggle(false)     -- force closed
 
--- Lowercase mode (also re-renders all current text)
-Library:SetLowercaseMode(true)
-
--- Update notification area positions after changing X/Y
-Library:UpdateNotificationAreas()
-
--- Register a cleanup callback (runs on unload/destroy)
-Library:OnUnload(function()
-    Library.Unloaded = true
-end)
-
--- Destroy the library entirely
+-- Immediately destroy the entire library
 Library:Unload()
 
--- Disable all toggles registered via PanicFuncs. Safe no-op if list is empty.
+-- Register a callback that fires when Library:Unload() is called
+Library:OnUnload(function()
+    -- cleanup connections, drawing objects, etc.
+end)
+```
+
+### Notifications
+
+```lua
+-- Simple string notification
+Library:Notify("Hello!")
+Library:Notify("Hello!", 3)         -- 3 second timeout
+
+-- Full table form
+Library:Notify({
+    Title       = "My Script",
+    Description = "Feature enabled!",
+    Time        = 5,
+    Icon        = "check",          -- optional icon name
+    IconColor   = Color3.new(0,1,0), -- optional icon color override
+})
+```
+
+### Lowercase Mode
+
+```lua
+-- Toggle lowercase rendering of all labels
+Library:SetLowercaseMode(true)
+Library:SetLowercaseMode(false)
+```
+
+### Panic System
+
+```lua
+-- Disable all registered panic toggles
 Library:Panic()
 
--- Register toggle indices that Panic() will disable.
--- Automatically sets Library.AllowPanic = true if any valid toggle is found.
-Library:PanicFuncs({ "MyFeature", "AnotherToggle" })
+-- Register toggle IDs for panic from a list
+-- Sets Library.AllowPanic = true automatically
+Library:PanicFuncs({ "SpeedHack", "Fly", "AimBot" })
+```
+
+### Notification Area
+
+```lua
+-- Call after changing NotificationPositionX/Y to reposition
+Library:UpdateNotificationAreas()
+```
+
+### Color Utilities
+
+```lua
+-- Get a slightly darker version of a Color3
+local darker = Library:GetDarkerColor(Color3.fromRGB(100, 100, 200))
+```
+
+### Attempt Save
+
+```lua
+-- Manually trigger SaveManager auto-save (no-op if no autosave config is set)
+Library:AttemptSave()
+```
+
+### Safe Callback
+
+```lua
+-- Calls func(a, b, c) with error protection if Library.SafeMode = true
+Library:SafeCallback(func, a, b, c)
+```
+
+### Language
+
+```lua
+-- Register translations for a language code
+Library:SetupLanguage("fr", { ... })   -- see Language System section
+
+-- Apply a registered language (or nil to reset to original)
+Library:SetLanguage("fr")
+Library:SetLanguage(nil)   -- revert to default
+```
+
+### Advanced
+
+```lua
+-- Register a label TextLabel for the language system
+Library:RegisterLabel("MyLabel_key", myTextLabel)
+
+-- Add a UI instance to the color registry (auto-updates on theme change)
+Library:AddToRegistry(frame, { BackgroundColor3 = "AccentColor" })
+
+-- Hook element hover highlight
+Library:OnHighlight(hoverDetect, colorTarget,
+    { BorderColor3 = "AccentColor" },   -- on hover
+    { BorderColor3 = "OutlineColor" }   -- on leave
+)
 ```
 
 ---
+
+## Panic System
+
+The Panic system lets you instantly disable a set of dangerous toggles via a keybind.
+
+### Method 1 — `RegisterPanic = true` on a Toggle
+
+The cleanest approach: declare panic membership at the toggle itself.
+
+```lua
+Group:AddToggle("SpeedHack", {
+    Text         = "Speed Hack",
+    Default      = false,
+    RegisterPanic = true,    -- ← auto-registers; sets AllowPanic = true
+    Callback = function(val)
+        -- ...
+    end,
+})
+
+Group:AddToggle("Fly", {
+    Text         = "Fly",
+    Default      = false,
+    RegisterPanic = true,
+    Callback = function(val)
+        -- ...
+    end,
+})
+```
+
+### Method 2 — `Library:PanicFuncs(names)`
+
+Bulk-register by toggle index after all toggles are created:
+
+```lua
+Group:AddToggle("SpeedHack", { ... })
+Group:AddToggle("Fly",       { ... })
+Group:AddToggle("AimBot",    { ... })
+
+Library:PanicFuncs({ "SpeedHack", "Fly", "AimBot" })
+-- Library.AllowPanic is now true; panic UI appears in MenuManager
+```
+
+### Method 3 — Manual
+
+```lua
+Library.AllowPanic = true
+table.insert(Library.PanicFunctions, Library.Toggles.SpeedHack)
+```
+
+### Triggering Panic
+
+- **Keybind** — the `PanicBind` key picker in MenuManager (default `Delete`) fires `Library:Panic()` when `PanicArmed` toggle is on.
+- **Panic button** — double-click the Panic button in the Menu tab.
+- **Code** — `Library:Panic()` anywhere.
+
+```lua
+Library:Panic()   -- disables all registered panic toggles
+```
+
+> **Note:** The Panic button in MenuManager is **disabled** (greyed out) when no panic
+> functions are registered. It enables automatically when at least one toggle is added via
+> `RegisterPanic = true` or `Library:PanicFuncs()`.
+
+---
+
+## Language System
+
+SnowFall supports runtime language switching. Elements keep their original text stored;
+switching a language applies all registered translations.
+
+### Registering Translations
+
+```lua
+Library:SetupLanguage("es", {
+    -- Toggle by index
+    SpeedHack = { Text = "Velocidad" },
+
+    -- Dropdown with translated values
+    SpeedMode = { Text = "Modo de velocidad", Values = { "Caminar", "Correr", "Volar" } },
+
+    -- Label (string key registered via Library:RegisterLabel)
+    MyGroupTitle = "Mi Grupo",
+})
+```
+
+### Applying a Language
+
+```lua
+Library:SetLanguage("es")   -- Spanish
+Library:SetLanguage("fr")   -- French
+Library:SetLanguage(nil)    -- Reset to original English
+```
+
+### Reading the Active Language
+
+```lua
+print(Library.CurrentLanguage)   -- "es", "fr", or nil
+```
+
+### Full Example
+
+```lua
+Library:SetupLanguage("fr", {
+    SpeedHack  = { Text = "Vitesse" },
+    Fly        = { Text = "Vol" },
+    SpeedSlider = { Text = "Multiplicateur de vitesse" },
+    WeaponList  = { Text = "Arme", Values = { "Pistolet", "Fusil", "Couteau" } },
+})
+Library:SetupLanguage("es", {
+    SpeedHack  = { Text = "Velocidad" },
+    Fly        = { Text = "Volar" },
+    SpeedSlider = { Text = "Multiplicador de velocidad" },
+    WeaponList  = { Text = "Arma", Values = { "Pistola", "Rifle", "Cuchillo" } },
+})
+
+-- Switch later
+Library:SetLanguage("fr")
+```
+
+### Language Hooks
+
+```lua
+-- React when the language changes
+Library:OnLanguageChanged(function(langCode)
+    print("Language set to:", langCode)
+end)
+```
+
+> **SaveManager integration:** When a config is loaded that was saved with a different
+> language, SaveManager shows a dialog:
+> *"This configuration was saved with the language 'ES'. Would you like to switch to it?"*
+> The user picks **Yes** or **No**. The config objects are always applied regardless of the choice.
+
+---
+
+## Tabs & SubTabs
 
 ### Tabs
 
-Tabs are the top-level sections. Order is determined by when `Window:AddTab()` is called.
+Tabs are the top-level navigation buttons along the top of the window.
 
-**Args**
-- `Name` String
-
-**Methods**
 ```lua
-Tab:ShowTab()              -- switch to this tab programmatically
-Tab:HideTab()              -- hide this tab
-Tab:SetName("New Name")    -- rename the tab button (also resizes the button)
-Tab:SetLayoutOrder(3)      -- reorder the tab button
+local Tab = Window:AddTab(Name, IconName)
 ```
 
-**Usage**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `Name` | `string` | Label for the tab button |
+| `IconName` | `string` (optional) | Icon to show beside the label (see [Icons](#icons)) |
+
+#### Methods
+
+```lua
+Tab:ShowTab()               -- switch to this tab
+Tab:HideTab()               -- hide this tab (removes from visible bar)
+Tab:SetName("New Name")     -- rename and resize the button
+Tab:SetLayoutOrder(3)       -- reorder the button position
+```
+
+#### Read-only State
+
+```lua
+print(Library.ActiveTab)    -- name of the currently visible tab
+```
+
+#### Example
+
 ```lua
 local Tabs = {
-    Main       = Window:AddTab("Main"),
-    UISettings = Window:AddTab("UI Settings"),
-}
-
--- The active tab name is always available:
-print(Library.ActiveTab)   -- "Main"
-
--- Switch tab from code:
-Tabs.Main:ShowTab()
-```
-
-**Tab with icon**
-```lua
--- Tabs support icons alongside the text label.
--- See the Icons section for all available icon names.
-local Tabs = {
-    Main  = Window:AddTab("Main",  "home"),
-    Aim   = Window:AddTab("Aim",   "crosshair"),
-    ESP   = Window:AddTab("ESP",   "eye"),
-    Misc  = Window:AddTab("Misc",  "settings"),
+    Main    = Window:AddTab("Main",    "home"),
+    Combat  = Window:AddTab("Combat",  "sword"),
+    Visuals = Window:AddTab("Visuals", "eye"),
+    Misc    = Window:AddTab("Misc",    "settings"),
 }
 ```
-
----
 
 ### SubTabs
 
-SubTabs split a Tab into nested sections with a secondary tab bar.
+SubTabs add a second navigation row **inside** a tab.
 
-**Args**
-- `Name` String
+```lua
+local SubTab = Tab:AddTab(Name, IconName)
+```
 
-**Methods**
+#### Methods
+
 ```lua
 SubTab:ShowTab()
 SubTab:HideTab()
-SubTab:SetName("New Name")  -- rename and resize the subtab button
+SubTab:SetName("New Name")
 ```
 
-**Usage**
+#### Read-only State
+
 ```lua
-local SubTabs = {
-    Elements = Tabs.Main:AddTab("Elements"),
-    Features = Tabs.Main:AddTab("Features"),
-}
-
-print(Library.ActiveSubTab)  -- "Elements"
-
--- Switch subtab from code:
-SubTabs.Features:ShowTab()
+print(Library.ActiveSubTab)   -- name of the currently visible sub-tab
 ```
 
-**SubTab with icon**
+#### Example
+
 ```lua
-local SubTabs = {
-    Combat   = Tabs.Main:AddTab("Combat",   "sword"),
-    Movement = Tabs.Main:AddTab("Movement", "run"),
+local CombatTabs = {
+    Aim      = Tabs.Combat:AddTab("Aim",      "crosshair"),
+    Movement = Tabs.Combat:AddTab("Movement", "run"),
+    Misc     = Tabs.Combat:AddTab("Misc"),
 }
+
+-- SubTab groupboxes
+local AimLeft  = CombatTabs.Aim:AddLeftGroupbox("Aim Settings")
+local AimRight = CombatTabs.Aim:AddRightGroupbox("Targets")
 ```
 
 ---
+
+## Groupboxes & Tabboxes
 
 ### Groupboxes
 
-Containers that hold UI elements. Every tab/subtab has a left and right column.
+Every tab/subtab has two columns (left and right). Groupboxes fill those columns.
 
-**Args**
-- `Name` String — title at the top
-
-**Usage**
 ```lua
-local LeftGroup  = Tabs.Main:AddLeftGroupbox("Controls")
-local RightGroup = Tabs.Main:AddRightGroupbox("Info")
-
--- Inside a SubTab:
-local SubLeft  = SubTabs.Elements:AddLeftGroupbox("Controls")
-local SubRight = SubTabs.Elements:AddRightGroupbox("Colors")
+local LeftGroup  = Tab:AddLeftGroupbox("Title")
+local RightGroup = Tab:AddRightGroupbox("Title")
 ```
 
-**Exposed properties for language system**
+Elements are stacked inside a groupbox via `AddToggle`, `AddButton`, etc.
+
+#### Exposed Label
+
 ```lua
-LeftGroup.TitleLabel   -- TextLabel of the groupbox title
+-- Register the groupbox title for language translations
+Library:RegisterLabel("MyGroup_title", LeftGroup.TitleLabel)
 ```
+
+### Tabbox (mini tab strip inside a column)
+
+Embed an additional tab strip inside a groupbox column.
+
+```lua
+-- Left-aligned tabbox inside a tab column
+local Tabbox = Tab:AddLeftTabbox()
+-- Right-aligned:
+local Tabbox = Tab:AddRightTabbox()
+-- Inside a groupbox (full-width):
+local Tabbox = LeftGroup:AddTabbox()
+
+-- Add pages to the tabbox
+local Page1 = Tabbox:AddTab("Options")
+local Page2 = Tabbox:AddTab("Advanced")
+
+-- Elements go on the pages
+Page1:AddToggle("SomeToggle", { ... })
+Page2:AddSlider("SomeSlider", { ... })
+```
+
+> **Tip:** `AddLeftTabbox()` / `AddRightTabbox()` return a tabbox that spans the full height
+> of their column. Use these for the MenuManager and ThemeManager panels.
 
 ---
 
-### Tabbox
+## Elements
 
-A mini tab strip embedded inside a column. Use when you need to further split a single column.
-
-**Usage**
-```lua
-local MyTabbox = LeftGroup:AddTabbox()
--- or left-aligned tabbox:
-local MyTabbox = LeftGroup:AddLeftTabbox()
-
-local BoxTab1 = MyTabbox:AddTab("Section A")
-local BoxTab2 = MyTabbox:AddTab("Section B")
-
--- Elements go directly on the tabbox tab:
-BoxTab1:AddToggle("TabToggle", { Text = "Option", Default = false })
-BoxTab2:AddSlider("TabSlider", { Text = "Speed", Default = 50, Min = 0, Max = 100, Rounding = 0 })
-```
-
-**Tabbox with icons**
-```lua
-local Box = LeftGroup:AddTabbox()
-local TabA = Box:AddTab("Aimbot",  "crosshair")
-local TabB = Box:AddTab("Visuals", "eye")
-```
+All elements live inside a Groupbox, a Tabbox page, or a DependencyBox.
 
 ---
 
 ### Toggle
 
-An on/off switch. Stored in `Library.Toggles`.
+A simple on/off checkbox.
 
-**Args**
-- `Index` String — key for `Toggles.MyKey`
-- `Text` String
-- `Default` Boolean
-- `Tooltip` String *(optional)*
-- `Disabled` Boolean *(optional)*
-- `Callback` Function — receives `(value: boolean)`
-
-**Methods**
 ```lua
-Toggles.MyToggle:SetValue(true)           -- set state
-Toggles.MyToggle:SetText("New Label")     -- rename
-Toggles.MyToggle:SetDisabled(true)        -- grey out and block interaction
-Toggles.MyToggle:SetVisible(false)        -- hide the row entirely
-Toggles.MyToggle:OnChanged(function(val)  -- subscribe without replacing Callback
-    print("changed to", val)
-end)
+Groupbox:AddToggle(Idx, Info)
 ```
 
-**Usage**
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Text` | `string` | — | Label text |
+| `Default` | `boolean` | `false` | Initial state |
+| `Callback` | `function(val)` | `nil` | Fires when the value changes |
+| `Disabled` | `boolean` | `false` | Start disabled (greyed out) |
+| `Visible` | `boolean` | `true` | Initial visibility |
+| `RegisterPanic` | `boolean` | `false` | Auto-add to `Library.PanicFunctions`; sets `AllowPanic = true` |
+| `Tooltip` | `string` | `nil` | Hover tooltip text |
+| `DisabledTooltip` | `string` | `nil` | Tooltip shown only when disabled |
+
+#### Methods
+
 ```lua
-LeftGroup:AddToggle("MyToggle", {
-    Text     = "Enable Feature",
-    Default  = false,
-    Tooltip  = "Turns the feature on or off",
+local t = Groupbox:AddToggle("Fly", { Text = "Fly", Default = false })
+
+t:SetValue(true)          -- set value programmatically (fires callback)
+t:SetDisabled(true)       -- disable/enable
+t:SetVisible(false)       -- show/hide
+t.Value                   -- read current value (boolean)
+
+-- Hook a listener (returns a connection object)
+local conn = t:OnChanged(function()
+    print("New value:", t.Value)
+end)
+conn:Disconnect()         -- remove listener
+```
+
+#### Examples
+
+```lua
+-- Basic toggle
+Group:AddToggle("SpeedHack", {
+    Text    = "Speed Hack",
+    Default = false,
     Callback = function(val)
-        print("Toggle:", val)
+        -- val is true/false
     end,
 })
 
-print(Toggles.MyToggle.Value)
-Toggles.MyToggle:SetValue(true)
-```
-
-**Chaining addons** — ColorPicker or KeyPicker can be chained:
-```lua
-LeftGroup:AddToggle("GlowToggle", {
-    Text = "Glow", Default = false,
-}):AddColorPicker("GlowColor", {
-    Default = Color3.fromRGB(255, 80, 80),
-    Title   = "Glow Color",
+-- Panic-registered toggle
+Group:AddToggle("Fly", {
+    Text          = "Fly",
+    Default       = false,
+    RegisterPanic = true,   -- will be disabled by Panic button
     Callback = function(val) end,
 })
 
-LeftGroup:AddToggle("FlyToggle", {
-    Text = "Fly", Default = false,
-}):AddKeyPicker("FlyBind", {
-    Default  = "F",
-    Mode     = "Toggle",
-    Text     = "Fly",
-    Callback = function(val) print("Fly active:", val) end,
+-- With tooltip
+Group:AddToggle("ESPBoxes", {
+    Text    = "ESP Boxes",
+    Default = true,
+    Tooltip = "Draw boxes around players",
+    Callback = function(val) end,
+})
+```
+
+---
+
+### Button
+
+A clickable button. Supports double-click confirmation and icons.
+
+```lua
+Groupbox:AddButton(Info)
+-- or
+Groupbox:AddButton(Text, Callback)     -- shorthand
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Text` | `string` | — | Button label |
+| `Func` | `function()` | — | Callback on click (or double-click if `DoubleClick = true`) |
+| `DoubleClick` | `boolean` | `false` | Require a second click within ~1 s to fire |
+| `Disabled` | `boolean` | `false` | Start disabled |
+| `Visible` | `boolean` | `true` | Initial visibility |
+| `Tooltip` | `string` | `nil` | Hover tooltip |
+| `IconName` | `string` | `nil` | Icon to show beside text |
+| `IconSide` | `"Left"/"Right"` | `"Left"` | Which side the icon appears on |
+| `IconColor` | `Color3` | `nil` | Override icon color (nil = follow AccentColor) |
+
+#### Methods
+
+```lua
+local btn = Groupbox:AddButton({ Text = "Teleport", Func = function() end })
+btn:SetDisabled(true)
+btn:SetVisible(false)
+```
+
+#### Example
+
+```lua
+-- Simple button
+Group:AddButton("Teleport to Spawn", function()
+    -- run action
+end)
+
+-- Double-click (safe delete)
+Group:AddButton({
+    Text        = "Delete Character",
+    DoubleClick = true,
+    Func        = function()
+        game.Players.LocalPlayer.Character:Destroy()
+    end,
+})
+
+-- Button with icon
+Group:AddButton({
+    Text     = "Copy Position",
+    IconName = "clipboard",
+    Func     = function()
+        setclipboard(tostring(game.Players.LocalPlayer.Character.PrimaryPart.Position))
+    end,
 })
 ```
 
@@ -358,63 +794,60 @@ LeftGroup:AddToggle("FlyToggle", {
 
 ### Slider
 
-A number picker within a range. Stored in `Library.Options`.
+A numeric range input.
 
-**Args**
-- `Index` String
-- `Text` String
-- `Default` Number
-- `Min` Number
-- `Max` Number
-- `Rounding` Number — decimal places (`0` = integers)
-- `Suffix` String *(optional)* — text after value (e.g. `"px"`, `"%"`)
-- `Compact` Boolean *(optional)* — smaller inline style for sub-slider pairs
-- `Disabled` Boolean *(optional)*
-- `Tooltip` String *(optional)*
-- `Callback` Function — receives `(value: number)`
-
-**Methods**
 ```lua
-Options.MySlider:SetValue(75)
-Options.MySlider:SetMin(10)
-Options.MySlider:SetMax(200)
-Options.MySlider:SetText("New Label")
-Options.MySlider:SetPrefix("~")
-Options.MySlider:SetSuffix("px")
-Options.MySlider:SetDisabled(true)
-Options.MySlider:SetVisible(false)
-Options.MySlider:OnChanged(function(val) print(val) end)
+Groupbox:AddSlider(Idx, Info)
 ```
 
-**Usage**
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Text` | `string` | — | Label text |
+| `Default` | `number` | — | Initial value |
+| `Min` | `number` | — | Minimum value |
+| `Max` | `number` | — | Maximum value |
+| `Rounding` | `number` | `0` | Decimal places (0 = integer) |
+| `Suffix` | `string` | `nil` | Unit appended to display (e.g. `"px"`, `"%"`) |
+| `Compact` | `boolean` | `false` | Compact display mode (no separate value label) |
+| `Callback` | `function(val)` | `nil` | Fires on change |
+| `Disabled` | `boolean` | `false` | Start disabled |
+| `Visible` | `boolean` | `true` | Initial visibility |
+| `Tooltip` | `string` | `nil` | Hover tooltip |
+
+#### Methods
+
 ```lua
-LeftGroup:AddSlider("MySlider", {
-    Text     = "Speed",
-    Default  = 50,
-    Min      = 0,
-    Max      = 200,
+local s = Groupbox:AddSlider("WalkSpeed", { ... })
+s:SetValue(25)
+s:SetDisabled(true)
+s.Value   -- current number
+```
+
+#### Example
+
+```lua
+Group:AddSlider("WalkSpeed", {
+    Text     = "Walk Speed",
+    Default  = 16,
+    Min      = 1,
+    Max      = 100,
     Rounding = 0,
-    Suffix   = "%",
-    Callback = function(val) print(val) end,
+    Suffix   = " st/s",
+    Callback = function(val)
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = val
+    end,
 })
 
-print(Options.MySlider.Value)
-```
-
-**Sub-Sliders** — chain two sliders on one row:
-```lua
--- Normal (labels above bars):
-LeftGroup:AddSlider("Width", {
-    Text = "Width", Default = 50, Min = 0, Max = 100, Rounding = 0,
-}):AddSlider("Height", {
-    Text = "Height", Default = 50, Min = 0, Max = 100, Rounding = 0,
-})
-
--- Compact (very short labels, label inside bar):
-LeftGroup:AddSlider("PosX", {
-    Text = "X", Default = 0, Min = -100, Max = 100, Rounding = 1, Compact = true,
-}):AddSlider("PosY", {
-    Text = "Y", Default = 0, Min = -100, Max = 100, Rounding = 1, Compact = true,
+Group:AddSlider("FOV", {
+    Text     = "FOV",
+    Default  = 70,
+    Min      = 1,
+    Max      = 120,
+    Rounding = 1,
+    Compact  = true,
+    Callback = function(val)
+        workspace.CurrentCamera.FieldOfView = val
+    end,
 })
 ```
 
@@ -422,131 +855,233 @@ LeftGroup:AddSlider("PosX", {
 
 ### Dropdown
 
-Lets the user pick one or more values from a list. Stored in `Library.Options`.
+A single-select or multi-select dropdown list.
 
-**Args**
-- `Index` String
-- `Text` String
-- `Values` Table — `{ "Option A", "Option B" }`
-- `Default` Number — 1-based index of initial selection
-- `Multi` Boolean *(optional)* — allow multiple selections
-- `Searchable` Boolean *(optional)* — search box inside dropdown
-- `AllowNull` Boolean *(optional)* — allow no selection
-- `SpecialType` String *(optional)* — `"Player"` or `"Team"` for auto-populated lists
-- `ExcludeLocalPlayer` Boolean *(optional)* — used with `SpecialType = "Player"`
-- `Disabled` Boolean *(optional)*
-- `Tooltip` String *(optional)*
-- `Callback` Function — receives `(value: string)` (or table for Multi)
-
-**Methods**
 ```lua
-Options.MyDrop:SetValue("Mode B")                -- set selection by value
-Options.MyDrop:SetValues({ "New A", "New B" })   -- replace entire list
-Options.MyDrop:SetDisabledValues({ "Mode C" })   -- grey out specific entries
-Options.MyDrop:SetText("New Label")              -- rename
-Options.MyDrop:SetDisabled(true)                 -- disable the whole element
-Options.MyDrop:SetVisible(false)
-Options.MyDrop:OnChanged(function(val) print(val) end)
+Groupbox:AddDropdown(Idx, Info)
 ```
 
-**Usage**
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Text` | `string` | — | Label text |
+| `Values` | `table` | — | List of string options |
+| `Default` | `any` | `1` | Initial selected value (string, or index) |
+| `AllowNull` | `boolean` | `false` | Allow no selection (`nil` value) |
+| `Multi` | `boolean` | `false` | Multi-select mode |
+| `Searchable` | `boolean` | `false` | Show a search box inside the list |
+| `SpecialType` | `"Player"/"Team"` | `nil` | Auto-populate with player/team names |
+| `ExcludeLocalPlayer` | `boolean` | `false` | When `SpecialType = "Player"`, exclude self |
+| `ReturnInstanceInstead` | `boolean` | `false` | Return Player/Team Instance instead of name |
+| `MaxVisibleDropdownItems` | `number` | `8` | Clamp 4–16 visible items before scrolling |
+| `Callback` | `function(val)` | `nil` | Fires on selection change |
+| `Disabled` | `boolean` | `false` | Start disabled |
+| `Visible` | `boolean` | `true` | Initial visibility |
+| `Tooltip` | `string` | `nil` | Hover tooltip |
+| `DisabledValues` | `table` | `{}` | Values that are shown but unselectable |
+
+#### Methods
+
 ```lua
--- Single select:
-LeftGroup:AddDropdown("MyDrop", {
-    Text     = "Mode",
-    Values   = { "Mode A", "Mode B", "Mode C" },
-    Default  = 1,
-    Callback = function(val) print(val) end,
+local d = Groupbox:AddDropdown("Weapon", { ... })
+
+d:SetValue("AK47")          -- set a single value
+d:SetValue({ "AK47", "M4" }) -- set multi-select
+d:SetValues({ "AK47", "M4", "Pistol" }) -- update the option list
+d:SetDisabled(true)
+d.Value                     -- string (single) or table of strings (multi)
+```
+
+#### Examples
+
+```lua
+-- Simple dropdown
+Group:AddDropdown("HitPart", {
+    Text   = "Hit Part",
+    Values = { "Head", "Torso", "Random" },
+    Default = "Head",
+    Callback = function(val) end,
 })
 
--- Multi-select:
-LeftGroup:AddDropdown("Colors", {
-    Text   = "Colors",
-    Values = { "Red", "Green", "Blue" },
-    Default = 1,
-    Multi   = true,
+-- Multi-select
+Group:AddDropdown("IgnoreList", {
+    Text   = "Ignore Players",
+    Values = { "PlayerA", "PlayerB", "PlayerC" },
+    Multi  = true,
+    AllowNull = true,
     Callback = function(selected)
-        -- selected is a table of chosen values
-        for _, v in pairs(selected) do print(v) end
+        -- selected is a table: { "PlayerA" = true, ... }
     end,
 })
 
--- Searchable:
-LeftGroup:AddDropdown("Item", {
-    Text       = "Item",
-    Values     = { "Apple", "Banana", "Cherry" },
-    Default    = 1,
-    Searchable = true,
-    Callback   = function(val) end,
+-- Auto-populated player list
+Group:AddDropdown("Target", {
+    Text        = "Target Player",
+    SpecialType = "Player",
+    AllowNull   = true,
+    Callback = function(player)
+        -- player is a Player Instance when ReturnInstanceInstead = true
+    end,
+    ReturnInstanceInstead = true,
 })
-
--- Player list (auto-updates as players join/leave):
-LeftGroup:AddDropdown("Target", {
-    Text                = "Target",
-    SpecialType         = "Player",
-    ExcludeLocalPlayer  = true,
-    Callback            = function(val) print("Target:", val) end,
-})
-
--- Team list (auto-updates):
-LeftGroup:AddDropdown("Team", {
-    Text        = "Team",
-    SpecialType = "Team",
-    Callback    = function(val) end,
-})
-
-print(Options.MyDrop.Value)
 ```
 
 ---
 
-### Button
+### ColorPicker
 
-Triggers a function on click. Supports a nested sub-button.
+An HSV color picker with optional gradient editing and transparency.
 
-**Args**
-- `Text` String
-- `Func` Function — called on click
-- `DoubleClick` Boolean *(optional)* — require double-click (useful for dangerous actions)
-- `Tooltip` String *(optional)*
-
-**Methods**
 ```lua
-MyButton:SetText("New Label")
-MyButton:SetDisabled(true)
-MyButton:SetVisible(false)
+Groupbox:AddColorPicker(Idx, Info)
+-- ColorPickers are usually chained from a Toggle or Label:
+Toggle:AddColorPicker(Idx, Info)
+Label:AddColorPicker(Idx, Info)
 ```
 
-**Usage**
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Title` | `string` | — | Shown inside the picker popup |
+| `Default` | `Color3\|ColorSequence` | `Color3.new(1,1,1)` | Initial color or gradient |
+| `Transparency` | `number` | `0` | Initial transparency (0–1) |
+| `Callback` | `function(val, transparency)` | `nil` | Fires on change |
+| `AllowGradient` | `boolean` | `false` | Enable gradient editing mode |
+
+#### Gradient Mode
+
+When `AllowGradient = true`, the picker shows a gradient preview bar below the color controls.
+
+- **Click the gradient bar** — selects the nearest colour stop and opens the colour picker for it.
+- **"+" button** (next to the "Gradient" label) — inserts a new stop at the midpoint to the right of the selected stop.
+- **Drag a stop handle** — repositions the stop along the gradient.
+- **Right-click a stop handle** — deletes that stop (minimum 2 stops always remain).
+- **Right-click the colour preview square** — opens a context menu: copy/paste gradient, copy stop hex/RGB.
+
+The `Callback` receives a `ColorSequence` value instead of a `Color3` when in gradient mode.
+
+#### Methods
+
 ```lua
-local MyButton = LeftGroup:AddButton({
-    Text = "Do Something",
-    Func = function()
-        print("Clicked!")
+local cp = Toggle:AddColorPicker("AimColor", { ... })
+
+cp:SetValueRGB(Color3.fromRGB(255, 0, 0))                -- set by Color3
+cp:SetValue({ Hue, Sat, Vib }, Transparency)              -- set by HSV table
+cp:SetValue(ColorSequence.new(...))                        -- set gradient (AllowGradient only)
+cp:SetDisabled(true)
+cp.Value                                                   -- Color3 or ColorSequence
+cp.Transparency                                            -- number 0–1
+```
+
+#### Examples
+
+```lua
+-- Simple color picker chained to a toggle
+Group:AddToggle("ESPEnabled", {
+    Text = "ESP",
+    Default = false,
+    Callback = function(val) end,
+}):AddColorPicker("ESPColor", {
+    Title    = "ESP Color",
+    Default  = Color3.fromRGB(255, 50, 50),
+    Callback = function(color)
+        -- update ESP color
     end,
 })
 
--- Sub-button (indented below the parent):
-MyButton:AddButton({
-    Text        = "Confirm Action",
-    Func        = function() print("Confirmed") end,
-    DoubleClick = true,
-})
+-- With transparency
+Group:AddToggle("Chams", { Text = "Chams", Default = false, Callback = function() end })
+    :AddColorPicker("ChamsColor", {
+        Title        = "Chams Color",
+        Default      = Color3.fromRGB(0, 120, 255),
+        Transparency = true,
+        Callback = function(color, transparency)
+            -- transparency = 0 (fully opaque) to 1 (fully transparent)
+        end,
+    })
 
--- Dangerous action with double-click guard:
-LeftGroup:AddButton({
-    Text        = "Reset Data",
-    DoubleClick = true,
-    Func        = function() print("Data reset") end,
+-- Gradient mode
+Group:AddColorPicker("SkyGradient", {
+    Title        = "Sky Gradient",
+    Default      = ColorSequence.new(Color3.fromRGB(0,0,0), Color3.fromRGB(100,100,255)),
+    AllowGradient = true,
+    Callback = function(sequence)
+        -- sequence is a ColorSequence
+    end,
 })
 ```
 
-**Button with icon**
+---
+
+### KeyPicker
+
+A keybind input. Supports toggle and hold modes, modifier keys, and optional UI visibility.
+
 ```lua
-LeftGroup:AddButton({
-    Text = "Teleport",
-    Func = function() end,
-    Icon = { Name = "arrow-right-circle" },
+Label:AddKeyPicker(Idx, Info)
+Toggle:AddKeyPicker(Idx, Info)
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Text` | `string` | — | Shown in the keybind prompt |
+| `Default` | `string` | — | Default key name, e.g. `"F"`, `"Delete"` |
+| `Mode` | `"Toggle"/"Hold"/"Press"` | `"Toggle"` | How the keybind fires |
+| `NoUI` | `boolean` | `false` | Hide the keybind box from the UI |
+| `SyncToggleState` | `boolean` | `false` | When `Mode = "Toggle"`, sync the key state to the parent Toggle value |
+| `Callback` | `function()` | `nil` | Fires when the bind is activated |
+| `ChangedCallback` | `function(key)` | `nil` | Fires when the bound key changes |
+| `Disabled` | `boolean` | `false` | Start disabled |
+| `Visible` | `boolean` | `true` | Initial visibility |
+
+#### Modes
+
+| Mode | Behaviour |
+|------|-----------|
+| `"Toggle"` | Press key → toggle the bound toggle on/off |
+| `"Hold"` | Hold key → true; release → false (fires Callback with state) |
+| `"Press"` | Single press → fire Callback once |
+
+#### Methods
+
+```lua
+local kp = Label:AddKeyPicker("FeatureBind", { ... })
+
+kp:SetValue({ "F", "Toggle", {} })   -- { key, mode, modifiers }
+kp:SetDisabled(true)
+kp.Value       -- key name string
+kp.Mode        -- mode string
+kp.Modifiers   -- table of modifier key names
+```
+
+#### Example
+
+```lua
+-- Keybind visible in UI, synced to a toggle
+Group:AddToggle("Fly", {
+    Text    = "Fly",
+    Default = false,
+    Callback = function(val) end,
+}):AddKeyPicker("FlyBind", {
+    Text             = "Fly",
+    Default          = "F",
+    Mode             = "Toggle",
+    SyncToggleState  = true,
+})
+
+-- Hidden keybind (MenuBind pattern)
+Group:AddLabel("Menu Bind"):AddKeyPicker("MenuBind", {
+    Default = "RightShift",
+    NoUI    = true,
+    Text    = "Menu Bind",
+})
+Library.ToggleKeybind = Library.Options.MenuBind
+
+-- Press mode keybind
+Group:AddLabel("Teleport"):AddKeyPicker("TpBind", {
+    Default  = "T",
+    Mode     = "Press",
+    Callback = function()
+        -- teleport action
+    end,
 })
 ```
 
@@ -554,850 +1089,647 @@ LeftGroup:AddButton({
 
 ### Input
 
-A text input field. Stored in `Library.Options`.
+A text input box.
 
-**Args**
-- `Index` String
-- `Text` String — label
-- `Default` String — initial text
-- `Numeric` Boolean — only allow numbers
-- `Finished` Boolean — fire Callback only on Enter (vs. every keystroke)
-- `Placeholder` String — hint text when empty
-- `ClearTextOnFocus` Boolean *(optional, default true)*
-- `AllowEmpty` Boolean *(optional, default true)*
-- `Disabled` Boolean *(optional)*
-- `Tooltip` String *(optional)*
-- `Callback` Function — receives `(value: string)`
-
-**Methods**
 ```lua
-Options.MyInput:SetValue("new text")   -- set the text
-Options.MyInput:SetDisabled(true)      -- block editing
-Options.MyInput:SetVisible(false)
-Options.MyInput:OnChanged(function(val) print(val) end)
+Groupbox:AddInput(Idx, Info)
 ```
 
-**Usage**
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Text` | `string` | — | Label shown above the box |
+| `Default` | `string` | `""` | Initial text |
+| `Numeric` | `boolean` | `false` | Only allow numeric characters |
+| `Finished` | `boolean` | `false` | Fire Callback only when Enter is pressed (vs. every keystroke) |
+| `Placeholder` | `string` | `nil` | Placeholder text when empty |
+| `Callback` | `function(text)` | `nil` | Fires on input |
+| `Disabled` | `boolean` | `false` | Start disabled |
+| `Visible` | `boolean` | `true` | Initial visibility |
+| `Tooltip` | `string` | `nil` | Hover tooltip |
+
+#### Methods
+
 ```lua
-LeftGroup:AddInput("MyInput", {
-    Text        = "Player Name",
-    Default     = "",
-    Numeric     = false,
+local inp = Groupbox:AddInput("PlayerName", { ... })
+inp:SetValue("NewText")
+inp.Value   -- current string
+```
+
+#### Example
+
+```lua
+Group:AddInput("ServerPort", {
+    Text        = "Port",
+    Default     = "8080",
+    Numeric     = true,
     Finished    = true,
-    Placeholder = "Enter name...",
-    Callback    = function(val) print(val) end,
+    Placeholder = "Enter port...",
+    Callback = function(text)
+        print("Port set to:", text)
+    end,
 })
-
--- Numeric input:
-LeftGroup:AddInput("Damage", {
-    Text     = "Damage",
-    Default  = "100",
-    Numeric  = true,
-    Finished = true,
-    Callback = function(val) print(tonumber(val)) end,
-})
-
-print(Options.MyInput.Value)
 ```
 
 ---
 
 ### Label
 
-A plain text label row. Primarily used as a prefix for addon elements.
+A static text line. Can also be used as an anchor to chain Addons (KeyPicker, ColorPicker).
 
-**Args**
-- `Text` String
-- `Tooltip` String *(optional)*
-
-**Methods**
 ```lua
-MyLabel:SetText("Updated text")
-MyLabel:SetVisible(false)
+Groupbox:AddLabel(Text, DoesWrap)
 ```
 
-**Usage**
-```lua
-LeftGroup:AddLabel("This is a label")
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `Text` | `string` | — | Label content |
+| `DoesWrap` | `boolean` | `false` | Allow text wrapping to multiple lines |
 
--- Labels are used as a prefix to chain addons:
-LeftGroup:AddLabel("Keybind"):AddKeyPicker("MyBind", { ... })
-LeftGroup:AddLabel("Color"):AddColorPicker("MyColor", { ... })
-LeftGroup:AddLabel("Panic"):AddKeyPicker("PanicBind", {
-    Default  = "Delete",
-    Mode     = "Press",
-    Text     = "Panic",
-    Callback = function() Library:Panic() end,
-})
+#### Methods
+
+```lua
+local lbl = Groupbox:AddLabel("Hello World")
+lbl:SetText("Updated text")
+```
+
+#### Chaining Addons
+
+```lua
+Groupbox:AddLabel("Keybind"):AddKeyPicker("MyBind", { ... })
+Groupbox:AddLabel("Color"):AddColorPicker("MyColor", { ... })
 ```
 
 ---
 
 ### Divider
 
-A horizontal separator line.
+A horizontal rule to visually separate element groups.
 
-**Usage**
 ```lua
-LeftGroup:AddDivider()
+Groupbox:AddDivider()
 ```
+
+No parameters. Just inserts a thin horizontal line.
 
 ---
 
-### Blank
+## Addons (Chaining)
 
-An invisible spacer row.
+Most interactive elements support chaining additional controls via `:AddColorPicker()` and `:AddKeyPicker()`.
+The addon appears inline with the parent element, right-aligned.
 
-**Usage**
+### ColorPicker Addon
+
 ```lua
-LeftGroup:AddBlank()
+Toggle:AddColorPicker(Idx, Info)
+Label:AddColorPicker(Idx, Info)
 ```
 
----
+Any `ColorPicker` fields apply. The picker is registered in `Library.Options[Idx]`.
 
-### ColorPicker (Addon)
+### KeyPicker Addon
 
-Chained onto a Toggle or Label. Supports solid colors and gradients. Stored in `Library.Options`.
-
-**Args**
-- `Index` String
-- `Default` Color3 or ColorSequence
-- `Title` String — popup title
-- `Transparency` Number *(optional)* — 0–1 initial transparency, enables transparency slider
-- `AllowGradient` Boolean *(optional)* — enable gradient editing
-- `Disabled` Boolean *(optional)*
-- `Callback` Function — receives `(color: Color3)` or `(sequence: ColorSequence)` for gradients
-
-**Methods**
 ```lua
-Options.MyColor:SetValueRGB(Color3.fromRGB(255, 0, 0))   -- set by Color3
-Options.MyColor:SetValue(Color3.fromRGB(255, 0, 0))      -- same
-Options.MyColor:SetDisabled(true)
-Options.MyColor:Show()     -- open the color picker popup
-Options.MyColor:Hide()     -- close the popup
-Options.MyColor:OnChanged(function(val) print(val) end)
+Toggle:AddKeyPicker(Idx, Info)
+Label:AddKeyPicker(Idx, Info)
 ```
 
-**Usage**
+Any `KeyPicker` fields apply. Picker registered in `Library.Options[Idx]`.
+
+### Chaining Multiple Addons
+
 ```lua
--- Solid color chained onto a Toggle:
-LeftGroup:AddToggle("GlowToggle", {
-    Text = "Glow", Default = false,
-}):AddColorPicker("GlowColor", {
-    Default      = Color3.fromRGB(255, 80, 80),
-    Title        = "Glow Color",
-    Transparency = 0,
-    Callback     = function(val) print(val) end,
+Group:AddToggle("Feature", {
+    Text    = "Feature",
+    Default = false,
+    Callback = function(val) end,
 })
+    :AddColorPicker("FeatureColor", {
+        Title    = "Color",
+        Default  = Color3.fromRGB(255, 100, 0),
+        Callback = function(color) end,
+    })
+    :AddKeyPicker("FeatureBind", {
+        Text    = "Feature",
+        Default = "G",
+        Mode    = "Toggle",
+    })
+```
 
--- Chained onto a Label:
-RightGroup:AddLabel("Outline"):AddColorPicker("OutlineColor", {
-    Default  = Color3.fromRGB(100, 180, 255),
-    Title    = "Outline Color",
+---
+
+## DependencyBox
+
+A container that shows or hides its children based on the state of other elements.
+
+```lua
+local Depbox = Groupbox:AddDependencyBox()
+
+-- or nested (DependencyBox inside a DependencyBox)
+local InnerDepbox = Depbox:AddDependencyBox()
+```
+
+Add elements to the depbox just like a groupbox:
+
+```lua
+Depbox:AddToggle("SubToggle", { ... })
+Depbox:AddSlider("SubSlider", { ... })
+Depbox:AddDropdown("SubDropdown", { ... })
+```
+
+### SetupDependencies
+
+After adding all children, declare the visibility condition:
+
+```lua
+Depbox:SetupDependencies({
+    { Library.Toggles.SomeToggle, true },       -- visible when SomeToggle = true
+    { Library.Options.SomeDropdown, "Value" },  -- visible when SomeDropdown = "Value"
+})
+```
+
+Each entry is `{ element, expectedValue }`. All conditions must match for the depbox to be visible (AND logic).
+
+### Full Example
+
+```lua
+Group:AddToggle("UseCustomSpeed", {
+    Text    = "Custom Speed",
+    Default = false,
     Callback = function(val) end,
 })
 
--- With transparency slider:
-RightGroup:AddLabel("Fill"):AddColorPicker("FillColor", {
-    Default      = Color3.fromRGB(255, 255, 255),
-    Title        = "Fill Color",
-    Transparency = 0.5,
-    Callback     = function(val) end,
+local SpeedDepbox = Group:AddDependencyBox()
+
+SpeedDepbox:AddSlider("CustomSpeed", {
+    Text    = "Walk Speed",
+    Default = 16,
+    Min = 1, Max = 200, Rounding = 0,
+    Callback = function(val) end,
+})
+SpeedDepbox:AddDropdown("SpeedMode", {
+    Text   = "Speed Mode",
+    Values = { "Walk", "Run", "Sprint" },
+    Default = "Walk",
+    Callback = function(val) end,
 })
 
--- Gradient (AllowGradient = true, Default is a ColorSequence):
-RightGroup:AddLabel("Gradient"):AddColorPicker("GradColor", {
-    Default = ColorSequence.new({
-        ColorSequenceKeypoint.new(0,   Color3.fromRGB(255, 80, 80)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 255, 80)),
-        ColorSequenceKeypoint.new(1,   Color3.fromRGB(80, 80, 255)),
-    }),
-    Title         = "Gradient",
-    AllowGradient = true,
-    Callback      = function(val)
-        -- val is ColorSequence when AllowGradient = true
-        print(val)
-    end,
+local SpeedModeDepbox = SpeedDepbox:AddDependencyBox()
+SpeedModeDepbox:AddSlider("SprintMultiplier", {
+    Text = "Sprint Multiplier", Default = 2, Min = 1, Max = 5, Rounding = 1,
+    Callback = function(val) end,
 })
+SpeedModeDepbox:SetupDependencies({ { Library.Options.SpeedMode, "Sprint" } })
 
--- Gradient controls:
--- Left-click empty bar area  → add a new color stop
--- Left-click + drag a stop   → move it along the bar
--- Right-click a stop (when 3+ stops exist) → remove it
-
--- Right-click the color preview square → context menu:
---   Copy gradient / Paste gradient / Copy stop HEX / Copy stop RGB   (gradient mode)
---   Copy color   / Paste color   / Copy HEX       / Copy RGB         (solid mode)
-
-print(Options.GlowColor.Value)
-Options.GlowColor:SetValueRGB(Color3.fromRGB(0, 255, 0))
+SpeedDepbox:SetupDependencies({ { Library.Toggles.UseCustomSpeed, true } })
 ```
 
 ---
 
-### KeyPicker (Addon)
+## Notifications
 
-Chained onto a Label or Toggle. Lets the user bind a key or mouse button. Stored in `Library.Options`.
-
-**Args**
-- `Index` String
-- `Default` String — key name e.g. `"F"`, `"MB2"`, `"LeftShift"`, `"RightShift"`, `"Delete"`
-- `Mode` String — `"Toggle"` | `"Hold"` | `"Always"` | `"Press"`
-- `Text` String — shown in the keybind list popup
-- `NoUI` Boolean — hide from the keybind list popup
-- `Tooltip` String *(optional)*
-- `Callback` Function — receives `(active: boolean)`
-
-**Mode reference**
-| Mode | Behavior |
-|------|----------|
-| `"Toggle"` | Key press toggles active state on/off |
-| `"Hold"` | Active while key is held down |
-| `"Always"` | Always active regardless of key |
-| `"Press"` | Fires callback once per key-down. Cannot be changed to Hold/Always. Only valid on Labels and Toggles. |
-
-**Methods**
 ```lua
-Options.MyBind:SetValue("G")                      -- change the bound key
-Options.MyBind:GetState()                         -- returns true if currently active
-Options.MyBind:SetModePickerVisibility(false)     -- hide the Toggle/Hold mode selector
-Options.MyBind:OnChanged(function(val) print(val) end)
-Options.MyBind:OnClick(function() print("key clicked") end)
-Options.MyBind:DoClick()                          -- programmatically fire the click
+-- Simple (string, optional timeout)
+Library:Notify("Done!")
+Library:Notify("Done!", 3)
+
+-- Full options
+Library:Notify({
+    Title       = "My Script",           -- bold heading
+    Description = "Feature activated!",  -- body text
+    Time        = 5,                      -- seconds (default 5)
+    Icon        = "check",               -- optional icon (see Icons section)
+    IconColor   = Color3.new(0, 1, 0),  -- override icon color
+    SoundId     = "rbxassetid://0",     -- optional sound
+    Persist     = false,                 -- if true, stays until manually dismissed
+})
 ```
 
-**Usage**
+### Notification Position
+
+Notifications are placed at `(NotificationPositionX%, NotificationPositionY%)` of the screen.
+
 ```lua
--- Toggle mode on a Label:
-LeftGroup:AddLabel("Fly"):AddKeyPicker("FlyBind", {
-    Default  = "F",
-    Mode     = "Toggle",
-    Text     = "Fly",
-    NoUI     = false,
-    Callback = function(val)
-        print("Fly active:", val)
-    end,
-})
-
--- Hold mode chained on a Toggle:
-LeftGroup:AddToggle("SprintToggle", {
-    Text = "Sprint", Default = false,
-}):AddKeyPicker("SprintBind", {
-    Default  = "LeftShift",
-    Mode     = "Hold",
-    Text     = "Sprint",
-    Callback = function(val)
-        print("Sprint held:", val)
-    end,
-})
-
--- Press mode (one-shot, locked — no mode selector shown):
-LeftGroup:AddLabel("Panic"):AddKeyPicker("PanicBind", {
-    Default  = "Delete",
-    Mode     = "Press",
-    Text     = "Panic",
-    Callback = function()
-        Library:Panic()
-    end,
-})
-
--- NoUI = true hides from the global keybind list (good for internal binds):
-LeftGroup:AddLabel("Menu"):AddKeyPicker("MenuBind", {
-    Default = "RightShift",
-    NoUI    = true,
-    Text    = "Menu Bind",
-})
-
-print(Options.FlyBind.Value)    -- current bound key string
-Options.FlyBind:GetState()      -- true/false (active state)
+Library.NotificationPositionX = 95    -- near right edge
+Library.NotificationPositionY = 50    -- vertically centered
+Library.NotificationAlignment = "Right"
+Library.NotificationBarSide   = "Bottom"
+Library:UpdateNotificationAreas()
 ```
 
 ---
 
-### DependencyBox
+## Dialogs
 
-A container that shows/hides based on element values. Elements inside are hidden when the condition is false.
+Modal dialogs block interaction with the rest of the UI.
 
-**Usage**
 ```lua
-LeftGroup:AddToggle("EnableAdv", { Text = "Enable Advanced", Default = false })
-
-local DepBox = LeftGroup:AddDependencyBox()
-
-DepBox:AddSlider("AdvStr", {
-    Text = "Strength", Default = 50, Min = 0, Max = 100, Rounding = 0,
-})
-
-DepBox:AddDropdown("AdvMode", {
-    Text = "Mode", Values = { "Mode A", "Mode B", "Mode C" }, Default = 1,
-})
-
--- Visible only when EnableAdv == true:
-DepBox:SetupDependencies({ { Toggles.EnableAdv, true } })
-
--- Multiple conditions (ALL must be true simultaneously):
-DepBox:SetupDependencies({
-    { Toggles.EnableAdv, true },
-    { Options.AdvMode,   "Mode B" },
-})
-
--- Nested dep box (visible only when AdvMode == "Mode B"):
-local SubDep = DepBox:AddDependencyBox()
-SubDep:AddToggle("SubOpt", { Text = "Sub Option", Default = false })
-SubDep:SetupDependencies({ { Options.AdvMode, "Mode B" } })
+local dialog = Window:AddDialog(Idx, Info)
 ```
 
----
+| Field | Type | Description |
+|-------|------|-------------|
+| `Title` | `string` | Bold heading |
+| `Description` | `string` | Body text (wraps) |
+| `TitleColor` | `Color3` | Override title text color |
+| `DescriptionColor` | `Color3` | Override description text color |
+| `OutsideClickDismiss` | `boolean` | Close when clicking outside |
+| `AutoDismiss` | `boolean` | Auto-close when any button is clicked (default `true`) |
+| `FooterButtons` | `table` | Pre-declared buttons (see below) |
 
-### Dialog
+### Footer Buttons
 
-A modal popup window with a title, description, and footer buttons. Created from the Window object.
-
-**Args**
-- `Idx` String — unique key to reference the dialog later
-- `Info` Table:
-  - `Title` String
-  - `Description` String
-  - `TitleColor` Color3 *(optional)*
-  - `DescriptionColor` Color3 *(optional)*
-  - `OutsideClickDismiss` Boolean *(optional)* — close when clicking outside
-
-**Methods**
 ```lua
-Dialog:Dismiss()
-
-Dialog:SetTitle("New Title")
-Dialog:SetDescription("New description")
-
-Dialog:AddFooterButton("Confirm", {
+dialog:AddFooterButton(ButtonIdx, {
     Title    = "Confirm",
-    Variant  = "Primary",     -- "Primary" | "Secondary" | "Destructive" | "Ghost"
-    WaitTime = 0,             -- seconds before button becomes clickable
-    Order    = 0,
-    Func     = function() Dialog:Dismiss() end,
+    Variant  = "Primary",    -- "Primary" | "Secondary" | "Destructive" | "Ghost"
+    WaitTime = 3,            -- seconds before the button becomes active
+    Order    = 1,            -- layout order
+    Callback = function(dialog)
+        -- dialog is the Dialog object
+        -- dialog:Dismiss() is called automatically unless AutoDismiss = false
+    end,
 })
-
-Dialog:RemoveFooterButton("Confirm")
-Dialog:SetButtonDisabled("Confirm", true)
-Dialog:SetButtonOrder("Confirm", 2)
-
--- Add UI elements inside the dialog body:
-Dialog:AddToggle("DialogToggle", { Text = "Accept Terms", Default = false })
-Dialog:AddInput("DialogInput", { Text = "Reason", Default = "" })
-Dialog:Resize()
 ```
 
-**Usage**
+### Full Example
+
 ```lua
-local Dlg = Window:AddDialog("ConfirmDlg", {
-    Title               = "Confirm Action",
-    Description         = "Are you sure you want to proceed?",
-    OutsideClickDismiss = true,
+local dialog = Window:AddDialog("ConfirmReset", {
+    Title       = "Reset Settings",
+    Description = "Are you sure you want to reset all settings? This cannot be undone.",
+    OutsideClickDismiss = false,
+    AutoDismiss = false,
 })
 
-Dlg:AddFooterButton("Cancel", {
+dialog:AddFooterButton("Cancel", {
     Title   = "Cancel",
     Variant = "Secondary",
-    Func    = function() Dlg:Dismiss() end,
-})
-
-Dlg:AddFooterButton("Confirm", {
-    Title   = "Confirm",
-    Variant = "Primary",
-    Func    = function()
-        print("Confirmed!")
-        Dlg:Dismiss()
+    Order   = 1,
+    Callback = function(d)
+        d:Dismiss()
     end,
 })
-
-Dlg:Resize()
-```
-
----
-
-### Notifications
-
-Toast messages that appear on-screen. Position and style come from MenuManager's Notifications tab.
-
-**Args (table form)**
-- `Title` String *(optional)*
-- `Description` String
-- `Time` Number — seconds before auto-dismiss (default `5`)
-- `Icon` String *(optional)* — asset ID
-- `IconColor` Color3 *(optional)*
-- `SoundId` String *(optional)*
-- `Persist` Boolean *(optional)* — never auto-dismiss
-
-**Bar behavior**
-- `NotificationBarSide = "Left"` or `"Right"` — static vertical color stripe on that side
-- `NotificationBarSide = "Top"` or `"Bottom"` — animated progress bar at top or bottom (if `NotificationAnimatedBar = true`)
-- Bar animations only apply to top/bottom sides
-
-**Usage**
-```lua
--- Full table form:
-Library:Notify({
-    Title       = "Alert",
-    Description = "Something happened.",
-    Time        = 5,
-    Icon        = "rbxassetid://12345",
-})
-
--- Shorthand (message, duration):
-Library:Notify("Quick message", 3)
-
--- Persistent notification (never auto-dismisses):
-Library:Notify({
-    Title       = "Warning",
-    Description = "Unload before rejoining.",
-    Persist     = true,
+dialog:AddFooterButton("Confirm", {
+    Title    = "Reset",
+    Variant  = "Destructive",
+    WaitTime = 2,   -- must wait 2 seconds before clicking
+    Order    = 2,
+    Callback = function(d)
+        -- reset logic here
+        d:Dismiss()
+    end,
 })
 ```
 
----
+### Methods
 
-### Icons
-
-Icons can be applied to tabs, sub-tabs, tabbox tabs, and buttons. The library uses an internal icon registry fetched from a remote source.
-
-**How icons work**
-- Pass an icon name string as the second argument to `AddTab()`, or as `Icon = { Name = "..." }` in button args.
-- Icons appear to the left of the label text by default.
-- The icon color defaults to `Library.AccentColor`. Override per-element with `IconColor`.
-- `Library.IconColor` sets a global icon tint. If `nil`, all icons follow AccentColor automatically.
-- Tabs and subtabs are pre-widened by 18px to accommodate the icon; the label shrinks accordingly.
-
-**Tab / SubTab icons**
 ```lua
--- Second argument to AddTab() is the icon name:
-local MainTab  = Window:AddTab("Main",    "home")
-local AimTab   = Window:AddTab("Aim",     "crosshair")
-local ESPTab   = Window:AddTab("ESP",     "eye")
-local MiscTab  = Window:AddTab("Misc",    "settings")
-local InfoTab  = Window:AddTab("Info",    "info")
-local LogTab   = Window:AddTab("Logs",    "list")
-local ItemsTab = Window:AddTab("Items",   "package")
-local MapTab   = Window:AddTab("Map",     "map")
-local ChatTab  = Window:AddTab("Chat",    "message-circle")
-local KeysTab  = Window:AddTab("Keybinds","key")
-
--- SubTabs follow the same pattern:
-local CombatSub  = Tabs.Main:AddTab("Combat",   "sword")
-local MoveSub    = Tabs.Main:AddTab("Movement", "arrow-up-circle")
-local VisualsSub = Tabs.Main:AddTab("Visuals",  "eye")
-```
-
-**Tabbox tab icons**
-```lua
-local Box  = LeftGroup:AddTabbox()
-local TabA = Box:AddTab("Aimbot",  "crosshair")
-local TabB = Box:AddTab("Visuals", "eye")
-local TabC = Box:AddTab("Misc",    "settings")
-```
-
-**Button icons**
-```lua
--- Icon on a button (left side by default):
-LeftGroup:AddButton({
-    Text = "Teleport",
-    Func = function() end,
-    Icon = { Name = "map-pin" },
-})
-
--- Icon with custom color:
-LeftGroup:AddButton({
-    Text      = "Danger",
-    Func      = function() end,
-    Icon      = { Name = "alert-triangle" },
-    IconColor = Color3.fromRGB(255, 60, 60),
-})
-
--- Icon on the right side:
-LeftGroup:AddButton({
-    Text     = "Next",
-    Func     = function() end,
-    Icon     = { Name = "arrow-right" },
-    IconSide = "Right",
-})
-```
-
-**Global icon color override**
-```lua
--- All icons follow AccentColor by default (nil = AccentColor):
-Library.IconColor = nil                          -- follow AccentColor (default)
-Library.IconColor = Color3.fromRGB(255, 255, 255) -- all icons white
-Library.IconColor = Color3.fromRGB(200, 150, 255) -- all icons purple
-
--- Per-element override (only affects that element):
--- Pass IconColor in the AddButton args or in AddTab's third argument
-```
-
-**Common icon names**
-```
-home            settings        search          plus           minus
-x               check           alert-triangle  alert-circle   info
-eye             eye-off         lock            unlock         key
-user            users           shield          zap            activity
-crosshair       target          sword           compass        map
-map-pin         navigation      arrow-up        arrow-down     arrow-left
-arrow-right     arrow-up-circle arrow-right-circle             chevron-up
-chevron-down    chevron-left    chevron-right   corner-up-left refresh-cw
-rotate-cw       rotate-ccw      maximize        minimize       move
-edit            edit-2          edit-3          trash          trash-2
-save            download        upload          copy           clipboard
-link            link-2          external-link   anchor         hash
-code            terminal        cpu             server         database
-package         box             layers          grid           list
-sliders         bar-chart       bar-chart-2     pie-chart      trending-up
-trending-down   clock           calendar        bell           bell-off
-message-circle  message-square  mail            send           share
-heart           star            bookmark        tag            flag
-image           film            camera          video          music
-volume          volume-1        volume-2        volume-x       mic
-radio           wifi            bluetooth       battery        power
-sun             moon            cloud           wind           thermometer
-globe           run             log-in          log-out        repeat
-shuffle         skip-back       skip-forward    play           pause
-stop            fast-forward    rewind          headphones     speaker
+dialog:Dismiss()                           -- close the dialog
+dialog:SetTitle("New Title")
+dialog:SetDescription("New Description")
+dialog:SetButtonDisabled("ButtonIdx", true)
+dialog:RemoveFooterButton("ButtonIdx")
+dialog:Resize()                            -- recalculate layout
 ```
 
 ---
 
-### Panic System
+## ThemeManager
 
-The panic system lets you register toggles that get force-disabled in one key press — useful for quickly turning off all active features when needed.
+The ThemeManager addon adds a fully-featured theme UI to your script.
 
-**Setup**
-```lua
--- Step 1 — register toggles by their index strings.
--- This also sets Library.AllowPanic = true automatically.
-Library:PanicFuncs({ "AimbotEnabled", "ESPEnabled", "SpeedHack", "Noclip" })
+### Setup
 
--- Step 2 — build your window (PanicFuncs must be called after elements are created):
-local Window = Library:CreateWindow({ ... })
--- ... create tabs, groupboxes, elements ...
-
-LeftGroup:AddToggle("AimbotEnabled", { Text = "Aimbot", Default = false })
-LeftGroup:AddToggle("ESPEnabled",    { Text = "ESP",    Default = false })
-LeftGroup:AddToggle("SpeedHack",     { Text = "Speed",  Default = false })
-LeftGroup:AddToggle("Noclip",        { Text = "Noclip", Default = false })
-
-Library:PanicFuncs({ "AimbotEnabled", "ESPEnabled", "SpeedHack", "Noclip" })
-
--- Step 3 — build MenuManager. The Panic section (toggle + keybind) appears
---           automatically because Library.AllowPanic is now true.
-MenuManager:SetLibrary(Library)
-MenuManager:BuildMenuSection(Tabs.UISettings)
-```
-
-**What MenuManager adds when AllowPanic = true**
-- A "Panic" toggle — arm the panic trigger (prevents accidental panics while you're in-menu)
-- A "Panic" keybind (Press mode, locked — cannot be changed to Hold or Always)
-- Pressing the bound key while the toggle is armed calls `Library:Panic()`
-
-**Manual control**
-```lua
--- Set AllowPanic manually (skips PanicFuncs):
-Library.AllowPanic = true
-
--- Call panic directly (e.g. from a button):
-Library:Panic()
-
--- Safe: if no toggles are registered, Panic() does nothing.
-Library.PanicFunctions = {}
-Library:Panic()  -- no-op
-```
-
-**Notes**
-- `Library.AllowPanic = false` (default) → the Panic section is not created in MenuManager
-- `Library:PanicFuncs({})` with an empty table or all-invalid names → AllowPanic stays false, Panic() stays a no-op
-- Only Toggle-type elements can be registered; other types are silently skipped
-- The Panic button in MenuManager (DoubleClick) always calls `Library:Panic()` regardless of AllowPanic
-- `Library:Panic()` returns immediately if `PanicFunctions` is empty
-
----
-
-### Draggable Label
-
-A floating draggable text overlay. Recommended over `SetWatermark` for new scripts.
-
-**Methods**
-```lua
-local Label = Library:AddDraggableLabel("My Script | FPS")
-
-Label:SetText("My Script | 60 fps")
-Label:SetVisible(false)
-Label:Destroy()
-```
-
-**Usage**
-```lua
-local FpsLabel = Library:AddDraggableLabel("My Script")
-
-local FrameTimer = tick()
-local FrameCount = 0
-local FPS = 60
-
-game:GetService("RunService").RenderStepped:Connect(function()
-    FrameCount += 1
-    if tick() - FrameTimer >= 1 then
-        FPS        = FrameCount
-        FrameTimer = tick()
-        FrameCount = 0
-    end
-    FpsLabel:SetText(("My Script | %d fps"):format(math.floor(FPS)))
-end)
-```
-
----
-
-### Watermark *(deprecated — use AddDraggableLabel)*
-
-```lua
-Library:SetWatermarkVisibility(true)
-Library:SetWatermark("My Script | 60 fps")
-```
-
----
-
-### MenuManager
-
-Adds a built-in UI Settings tab with cursor, controller, notification controls, and optional panic section.
-
-**Usage**
-```lua
--- Always build before ThemeManager/SaveManager:
-MenuManager:SetLibrary(Library)
-MenuManager:BuildMenuSection(Tabs.UISettings)
-
--- Add custom elements after building:
-MenuManager.MenuTab:AddDivider()
-MenuManager.MenuTab:AddToggle("MyOption", { Text = "Option", Default = false })
-```
-
-**Globals after BuildMenuSection**
-- `MenuManager.MenuTab` — the Menu sub-tab (cursor, controller, keybind, panic)
-- `MenuManager.NotifTab` — the Notifications sub-tab
-- `MenuManager.TabBox` — the tabbox containing both
-
-**Sections built by MenuManager**
-1. Lowercase Mode toggle
-2. Custom Cursor toggle + color picker
-3. Cursor Type dropdown with nested dep boxes (Dot scale/outline, Plus spacing/bars/outline)
-4. Controller Support toggle + nav type dropdown
-5. Menu Bind label + keybind (NoUI, RightShift default)
-6. **(Optional)** Panic toggle + keybind — only when `Library.AllowPanic = true`
-7. Unload button (DoubleClick)
-8. Panic button (DoubleClick)
-9. Notifications sub-tab: Force Color, colors, Animated Bar, Bar Side, Position X/Y, Alignment, test notification
-
-**Translations** — MenuManager registers built-in Spanish (`"es"`) and French (`"fr"`) translations for all its elements via `Library:SetupLanguage()`. You can add more languages using the same system.
-
----
-
-### ThemeManager
-
-Color theme selector and customization UI.
-
-**Usage**
 ```lua
 ThemeManager:SetLibrary(Library)
-ThemeManager:SetFolder("MyScriptHub")     -- folder name for saved themes
-ThemeManager:ApplyToTab(Tabs.UISettings)  -- builds the UI into this tab
+ThemeManager:SetFolder("MyScript")    -- saves themes in MyScript/themes/
+ThemeManager:ApplyTheme("Default")   -- apply built-in theme on start
+```
+
+### Building the UI Section
+
+```lua
+ThemeManager:BuildThemeSection(Tabs.UISettings)
+```
+
+This adds a "Themes" groupbox with:
+- Theme list dropdown (built-in and custom)
+- Accent / Background / Main / Outline / Font color pickers
+- Save / Load / Delete custom theme buttons
+- Animated rainbow/gradient theme toggle
+
+### API
+
+```lua
+ThemeManager:ApplyTheme("Default")     -- apply a named built-in theme
+ThemeManager:ApplyTheme("Midnight")
+ThemeManager:ApplyTheme("Rose")
+
+ThemeManager:SaveCustomTheme("MyTheme")
+ThemeManager:LoadCustomTheme("MyTheme")
 ```
 
 ---
 
-### SaveManager
+## SaveManager
 
-Saves and loads element configs per-game.
+The SaveManager addon provides JSON-based config persistence.
 
-**Usage**
+### Setup
+
 ```lua
 SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()                              -- don't save theme in config
-SaveManager:SetIgnoreIndexes({ "MenuBind", "LanguageSelect" }) -- skip these element keys
-SaveManager:SetFolder("MyScriptHub/game-name")
+SaveManager:SetFolder("MyScript")       -- root folder (default "LinoriaLibSettings")
+SaveManager:SetSubFolder("configs")     -- optional subfolder inside root/settings/
+SaveManager:IgnoreThemeSettings()       -- don't save theme colors (handled by ThemeManager)
+```
+
+### Manual Save & Load
+
+```lua
+local ok, err = SaveManager:Save("myconfig")
+if not ok then warn("Save failed:", err) end
+
+local ok, err = SaveManager:Load("myconfig")
+if not ok then warn("Load failed:", err) end
+
+SaveManager:Delete("myconfig")
+
+local list = SaveManager:RefreshConfigList()  -- returns table of config names
+```
+
+### Building the UI Section
+
+```lua
 SaveManager:BuildConfigSection(Tabs.UISettings)
 ```
 
----
+Adds a "Configuration" groupbox with:
+- Config name input + create button
+- Config list dropdown + load / overwrite / delete / refresh buttons
+- Autosave and autoload pickers
+- Reset autosave / autoload buttons
 
-### Language System
+### Ignoring Specific Keys
 
-Translates every UI element at runtime without reloading.
-
----
-
-#### SetupLanguage
-
-Register a translation table. Multiple calls for the same code **merge** (additive).
-
-**Args**
-- `langCode` String — e.g. `"es"`, `"fr"`, `"de"`
-- `translations` Table
-
-**Translation format**
 ```lua
--- Element by Index key:
-MyToggle   = { Text = "Translated label" }
-MyDropdown = { Text = "Translated label", Values = { "Option 1", "Option 2" } }
-
--- Registered label key (tabs, groupboxes — see RegisterLabel):
-Tab_Main    = "Principal"
-Group_Ctrl  = "Controles"
+SaveManager:SetIgnoreIndexes({ "MySlider", "SomeToggle" })
 ```
 
-**Usage**
+### Language Saving
+
+SaveManager automatically saves the active language in the config JSON.
+When loading a config whose saved language differs from the current language,
+a dialog appears:
+
+> *"This configuration was saved with the language 'ES'. Would you like to switch to it?"*
+>
+> **Yes — apply language** / **No — keep current**
+
+The config objects are always applied regardless of the choice.
+
+### Parser Reference
+
+Internally, SaveManager registers parsers for each element type.
+Supported types: `Toggle`, `Slider`, `Dropdown`, `ColorPicker` (including gradients), `KeyPicker`, `Input`.
+
+---
+
+## MenuManager
+
+The MenuManager addon adds a standard "Menu" and "Notifications" UI in your UI Settings tab.
+
+### Setup
+
 ```lua
-Library:SetupLanguage("es", {
-    MyToggle  = { Text = "Palanca" },
-    MySlider  = { Text = "Deslizador" },
-    MyDrop    = { Text = "Lista", Values = { "Alfa", "Beta", "Gamma" } },
-    Tab_Main  = "Principal",
-    Group_Controls = "Controles",
+MenuManager:SetLibrary(Library)
+```
+
+### Building the Section
+
+```lua
+local TabBox = MenuManager:BuildMenuSection(Tabs.UISettings)
+```
+
+This creates a left-aligned tabbox with two pages:
+
+#### Menu Page
+- **Lowercase Mode** toggle
+- **Custom Cursor** toggle + color picker (cursor color)
+- **Cursor Type** dropdown: Mouse / Dot / Plus
+  - Dot sub-options: scale, outline, outline thickness
+  - Plus sub-options: spacing, individual bars, outline, outline thickness
+- **Controller Support** toggle
+  - Controller Navigation dropdown (Dpad / Joystick)
+- **Menu Bind** label + key picker
+- **Panic** section (only when `Library.AllowPanic = true`):
+  - Panic Armed toggle + keybind
+- **Unload** button (double-click)
+- **Panic** button (double-click; disabled when no panic functions registered)
+
+#### Notifications Page
+- Force Color toggle + accent / outline / font color pickers
+- Animated Bar toggle
+- Bar Side dropdown
+- Position X slider + Position Y slider (compact)
+- Alignment dropdown
+- Test Message input + Send Notification button
+
+### Methods
+
+```lua
+-- After building, these are accessible on the MenuManager object:
+MenuManager.MenuTab     -- the Menu page object
+MenuManager.NotifTab    -- the Notifications page object
+MenuManager.TabBox      -- the outer tabbox
+MenuManager.PanicButton -- the Panic button (use :SetDisabled to control it)
+```
+
+### Full Usage Example
+
+```lua
+ThemeManager:BuildThemeSection(Tabs.UISettings)
+SaveManager:BuildConfigSection(Tabs.UISettings)
+MenuManager:BuildMenuSection(Tabs.UISettings)
+```
+
+---
+
+## Icons
+
+Icons appear alongside tab buttons, sub-tab buttons, and buttons via `IconName`.
+
+### Usage
+
+```lua
+-- Tab icon
+local Tab = Window:AddTab("Combat", "sword")
+
+-- SubTab icon
+local SubTab = Tab:AddTab("Aim", "crosshair")
+
+-- Button icon
+Group:AddButton({
+    Text     = "Copy",
+    IconName = "clipboard",
+    IconSide = "Left",   -- "Left" | "Right"
 })
 ```
 
----
+### Icon Color Priority
 
-#### SetLanguage
-
-Switch the active language. Pass `nil` to restore original text.
+1. `IconColor` on the element call — per-element override
+2. `Library.IconColor` — global override (set to `nil` by default)
+3. `Library.AccentColor` — automatic fallback (default when both above are `nil`)
 
 ```lua
-Library:SetLanguage("es")
-Library:SetLanguage("fr")
-Library:SetLanguage(nil)   -- restore defaults
+-- All icons follow AccentColor (default behaviour)
+Library.IconColor = nil
+
+-- Force all icons to a specific color globally
+Library.IconColor = Color3.fromRGB(255, 255, 255)
+
+-- Per-element icon color
+Window:AddTab("Main", "home")            -- follows AccentColor
+Window:AddTab("Debug", "bug", Color3.fromRGB(255, 80, 80))  -- pinned red
 ```
 
----
+### Available Icons
 
-#### RegisterLabel
+Below is the full icon set. Pass the key string as `IconName`.
 
-Register a UI text instance under a key so SetupLanguage can update it.
-
-**Args**
-- `key` String — matches a key in translation tables
-- `instance` TextLabel
-- `applyFn` Function *(optional)* — called with new text; required for tabs/subtabs so the button frame resizes
-
-```lua
--- Tabs (need applyFn to resize the button frame):
-Library:RegisterLabel("Tab_Main", Tabs.Main.ButtonLabel,
-    function(t) Tabs.Main:SetName(t) end)
-Library:RegisterLabel("Tab_UI", Tabs.UISettings.ButtonLabel,
-    function(t) Tabs.UISettings:SetName(t) end)
-
--- SubTabs:
-Library:RegisterLabel("Sub_Elements", SubTabs.Elements.ButtonLabel,
-    function(t) SubTabs.Elements:SetName(t) end)
-
--- Groupboxes (full-width, no resize needed):
-Library:RegisterLabel("Group_Controls", LeftGroup.TitleLabel)
-Library:RegisterLabel("Group_Colors",   RightGroup.TitleLabel)
+```
+home          search        settings       gear
+user          users         star           heart
+check         x             plus           minus
+arrow-up      arrow-down    arrow-left     arrow-right
+chevron-up    chevron-down  chevron-left   chevron-right
+eye           eye-off       lock           unlock
+bell          bell-off      info           warning
+alert         error         question       help
+trash         delete        edit           pencil
+save          copy          clipboard      paste
+upload        download      refresh        sync
+link          external      share          send
+mail          message       chat           comment
+phone         camera        image          video
+music         volume        volume-mute    volume-low
+play          pause         stop           skip
+rewind        fast-forward  shuffle        repeat
+folder        file          document       code
+terminal      database      server         cloud
+wifi          bluetooth     signal         battery
+monitor       laptop        phone          tablet
+gamepad       controller    keyboard       mouse
+crosshair     sword         shield         bomb
+gun           knife         bow            axe
+run           walk          jump           fly
+map           pin           compass        navigation
+clock         timer         calendar       date
+sun           moon          weather        snow
+fire          water         earth          wind
+skull         ghost         robot          alien
+flag          tag           bookmark       label
+grid          list          menu           sidebar
+maximize      minimize      fullscreen     window
+zoom-in       zoom-out      fit            crop
+rotate        flip          move           drag
+filter        sort          group          stack
+chart         graph         bar-chart      pie-chart
+dollar        coin          gem            trophy
+gift          bag           cart           store
+wrench        hammer        drill          tool
+bulb          idea          rocket         plane
+car           truck         bike           boat
 ```
 
+> **Note:** Not all icons may be loaded in every environment. If an icon name is not found,
+> the element renders as if no icon was specified.
+
 ---
 
-#### Full Language Example
+## Tooltips
+
+Any element that accepts a `Tooltip` field will show a hover tooltip.
 
 ```lua
--- 1. Register labels after creating tabs/groups
-Library:RegisterLabel("Tab_Main",     Tabs.Main.ButtonLabel,       function(t) Tabs.Main:SetName(t) end)
-Library:RegisterLabel("Sub_Elements", SubTabs.Elements.ButtonLabel, function(t) SubTabs.Elements:SetName(t) end)
-Library:RegisterLabel("Group_Ctrl",   LeftGroup.TitleLabel)
-
--- 2. Define translations
-Library:SetupLanguage("es", {
-    Tab_Main     = "Principal",
-    Sub_Elements = "Elementos",
-    Group_Ctrl   = "Controles",
-    MyToggle     = { Text = "Palanca" },
-    MySlider     = { Text = "Deslizador" },
-    MyDrop       = { Text = "Lista", Values = { "Alfa", "Beta", "Gamma" } },
+Group:AddToggle("Aimbot", {
+    Text    = "Aimbot",
+    Default = false,
+    Tooltip = "Automatically aim at the nearest player",
+    Callback = function(val) end,
 })
 
--- 3. Language picker (inside MenuManager.MenuTab)
-MenuManager.MenuTab:AddDivider()
-MenuManager.MenuTab:AddDropdown("LanguageSelect", {
-    Text    = "Language",
-    Values  = { "English", "Español", "Français" },
-    Default = 1,
-    Callback = function(val)
-        if val == "Español" then
-            Library:SetLanguage("es")
-        elseif val == "Français" then
-            Library:SetLanguage("fr")
-        else
-            Library:SetLanguage(nil)
-        end
-    end,
+Group:AddButton({
+    Text            = "Panic",
+    DoubleClick     = true,
+    Tooltip         = "Double-click to disable all features",
+    DisabledTooltip = "No panic functions registered",
+    Func            = function() Library:Panic() end,
 })
 ```
 
----
-
-### Registry / Theme System
-
-The registry syncs UI element colors to theme keys at runtime. When a theme changes, all registered instances update automatically.
-
-**Theme color keys**
-| Key | Default |
-|-----|---------|
-| `MainColor` | window background |
-| `SecondColor` | secondary panels |
-| `ThirdColor` | tertiary panels |
-| `BorderColor` | borders |
-| `OutlineColor` | outlines |
-| `AccentColor` | accent (matches icon/cursor color when unoverridden) |
-| `FontColor` | text color |
-
-**Add to registry manually**
-```lua
--- Register a Frame to follow MainColor:
-Library:AddToRegistry(someFrame, { BackgroundColor3 = "MainColor" })
-
--- Register a TextLabel to follow FontColor:
-Library:AddToRegistry(someLabel, { TextColor3 = "FontColor" })
-
--- Register a UIStroke to follow AccentColor:
-Library:AddToRegistry(someStroke, { Color = "AccentColor" })
-```
-
-**Get current theme color**
-```lua
-local accent = Library:GetColor("AccentColor")   -- returns Color3
-```
+A `DisabledTooltip` can also be provided — it shows only when the element is in its disabled state.
 
 ---
 
-### Unload / Cleanup
+## Events & Hooks
+
+### OnChanged
+
+Listen for any element's value change:
 
 ```lua
--- Register a callback that runs when the library is unloaded:
+local toggle = Groupbox:AddToggle("Fly", { ... })
+local conn = toggle:OnChanged(function()
+    print("Fly is now:", toggle.Value)
+end)
+
+-- Remove when done
+conn:Disconnect()
+```
+
+### OnUnload
+
+Register cleanup logic:
+
+```lua
 Library:OnUnload(function()
+    RunService:UnbindFromRenderStep("MyStep")
+    connection:Disconnect()
     Library.Unloaded = true
-    -- stop any loops, disconnect events, etc.
 end)
-
--- Trigger unload (destroys GUI, fires all OnUnload callbacks):
-Library:Unload()
 ```
 
-**Pattern for safe loops**
-```lua
-Library:OnUnload(function() Library.Unloaded = true end)
+### GiveSignal
 
-game:GetService("RunService").Heartbeat:Connect(function()
-    if Library.Unloaded then return end
-    -- your logic here
+All RBXScriptConnections created inside the library should use `Library:GiveSignal()` so
+they are properly disconnected on `Library:Unload()`:
+
+```lua
+Library:GiveSignal(
+    RunService.Heartbeat:Connect(function()
+        -- runs until library unloads
+    end)
+)
+```
+
+### OnLanguageChanged
+
+```lua
+Library:OnLanguageChanged(function(langCode)
+    if langCode == "fr" then
+        -- update any non-registered labels
+    end
 end)
 ```
 
 ---
 
-### Full Script Template
+## Complete Full Example
+
+A comprehensive end-to-end script demonstrating all major features:
 
 ```lua
 local repo         = "https://raw.githubusercontent.com/SoNotClose/SnowFallV2/main/"
@@ -1409,598 +1741,212 @@ local SaveManager  = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))(
 local Options = Library.Options
 local Toggles = Library.Toggles
 
+-- ── Window ────────────────────────────────────────────────────────────────────
 local Window = Library:CreateWindow({
-    Title        = "My Script",
-    SubTitle     = "v1.0",
+    Title        = "SnowFall Demo",
+    SubTitle     = "v2.0",
+    GameTitle    = "My Game",
     Center       = true,
     AutoShow     = true,
     Resizable    = true,
-    NotifySide   = "Right",
-    TabPadding   = 8,
+    AllowPanic   = false,   -- will be set to true automatically when RegisterPanic toggles are added
     MenuFadeTime = 0.2,
 })
 
+-- ── Tabs ──────────────────────────────────────────────────────────────────────
 local Tabs = {
-    Main       = Window:AddTab("Main",       "home"),
-    UISettings = Window:AddTab("UI Settings", "settings"),
+    Combat    = Window:AddTab("Combat",    "sword"),
+    Visuals   = Window:AddTab("Visuals",   "eye"),
+    Misc      = Window:AddTab("Misc",      "settings"),
+    UISettings = Window:AddTab("UI"),
 }
 
-local SubTabs = {
-    Features = Tabs.Main:AddTab("Features", "zap"),
-    Info     = Tabs.Main:AddTab("Info",     "info"),
+-- ── SubTabs ───────────────────────────────────────────────────────────────────
+local CombatSubs = {
+    Aim      = Tabs.Combat:AddTab("Aim"),
+    Movement = Tabs.Combat:AddTab("Movement"),
 }
 
-local LeftGroup  = SubTabs.Features:AddLeftGroupbox("Controls")
-local RightGroup = SubTabs.Features:AddRightGroupbox("Colors")
+-- ── Groupboxes ────────────────────────────────────────────────────────────────
+local AimLeft    = CombatSubs.Aim:AddLeftGroupbox("Aimbot")
+local AimRight   = CombatSubs.Aim:AddRightGroupbox("Filters")
+local MovLeft    = CombatSubs.Movement:AddLeftGroupbox("Speed / Jump")
+local VisLeft    = Tabs.Visuals:AddLeftGroupbox("ESP")
+local VisRight   = Tabs.Visuals:AddRightGroupbox("Chams")
+local MiscLeft   = Tabs.Misc:AddLeftGroupbox("Utilities")
+local MiscRight  = Tabs.Misc:AddRightGroupbox("Info")
 
--- ── Elements ──────────────────────────────────────────────────────────────────
-
--- Toggle
-LeftGroup:AddToggle("MyToggle", {
-    Text     = "Enable Feature",
-    Default  = false,
-    Callback = function(val) print("Toggle:", val) end,
-})
-
--- Slider
-LeftGroup:AddSlider("MySlider", {
-    Text = "Speed", Default = 50, Min = 0, Max = 200, Rounding = 0,
-    Callback = function(val) print("Speed:", val) end,
-})
-
--- Dropdown
-LeftGroup:AddDropdown("MyDrop", {
-    Text = "Mode", Values = { "Mode A", "Mode B" }, Default = 1,
-    Callback = function(val) print("Mode:", val) end,
-})
-
--- Button
-LeftGroup:AddButton({
-    Text = "Fire",
-    Func = function() print("Fired!") end,
-})
-
--- Input
-LeftGroup:AddInput("MyInput", {
-    Text = "Name", Default = "", Placeholder = "Enter...", Finished = true,
-    Callback = function(val) print("Input:", val) end,
-})
-
--- Keybind on Label
-LeftGroup:AddLabel("Fly"):AddKeyPicker("FlyBind", {
-    Default = "F", Mode = "Toggle", Text = "Fly",
-    Callback = function(val) print("Fly:", val) end,
-})
-
--- Keybind chained on Toggle
-LeftGroup:AddToggle("SprintToggle", {
-    Text = "Sprint", Default = false,
-}):AddKeyPicker("SprintBind", {
-    Default = "LeftShift", Mode = "Hold", Text = "Sprint",
-    Callback = function(val) end,
-})
-
--- Color picker
-RightGroup:AddLabel("Color"):AddColorPicker("MyColor", {
-    Default = Color3.fromRGB(255, 80, 80), Title = "Feature Color",
-    Callback = function(val) print("Color:", val) end,
-})
-
--- Color picker with transparency
-RightGroup:AddLabel("Fill"):AddColorPicker("FillColor", {
-    Default = Color3.fromRGB(255, 255, 255), Title = "Fill", Transparency = 0.5,
-    Callback = function(val) end,
-})
-
--- Gradient picker
-RightGroup:AddLabel("Gradient"):AddColorPicker("GradColor", {
-    Default = ColorSequence.new({
-        ColorSequenceKeypoint.new(0,   Color3.fromRGB(255, 80, 80)),
-        ColorSequenceKeypoint.new(1,   Color3.fromRGB(80, 80, 255)),
-    }),
-    Title = "Gradient", AllowGradient = true,
-    Callback = function(val) end,
-})
-
--- Dependency box
-LeftGroup:AddToggle("AdvEnabled", { Text = "Advanced", Default = false })
-local AdvDep = LeftGroup:AddDependencyBox()
-AdvDep:AddSlider("AdvStr", { Text = "Strength", Default = 50, Min = 0, Max = 100, Rounding = 0 })
-AdvDep:SetupDependencies({ { Toggles.AdvEnabled, true } })
-
--- ── Panic ─────────────────────────────────────────────────────────────────────
-
--- Register which toggles Panic() will disable.
--- Must be called after the toggles are created.
--- Also sets Library.AllowPanic = true, so MenuManager shows the panic section.
-Library:PanicFuncs({ "MyToggle", "SprintToggle" })
-
--- ── Draggable label ───────────────────────────────────────────────────────────
-
-local FpsLabel = Library:AddDraggableLabel("My Script")
-local _ft, _fc, _fps = tick(), 0, 60
-game:GetService("RunService").RenderStepped:Connect(function()
-    _fc += 1
-    if tick() - _ft >= 1 then _fps = _fc _ft = tick() _fc = 0 end
-    FpsLabel:SetText(("My Script | %d fps"):format(math.floor(_fps)))
-end)
-
--- ── Unload ────────────────────────────────────────────────────────────────────
-
-Library:OnUnload(function()
-    Library.Unloaded = true
-end)
-
--- ── Addons (always in this order) ─────────────────────────────────────────────
-
-MenuManager:SetLibrary(Library)
-MenuManager:BuildMenuSection(Tabs.UISettings)
-
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ "MenuBind", "PanicBind", "LanguageSelect" })
-ThemeManager:SetFolder("MyScriptHub")
-SaveManager:SetFolder("MyScriptHub/game-name")
-
-SaveManager:BuildConfigSection(Tabs.UISettings)
-ThemeManager:ApplyToTab(Tabs.UISettings)
-
--- ── Language (optional) ───────────────────────────────────────────────────────
-
-Library:RegisterLabel("Tab_Main",      Tabs.Main.ButtonLabel,        function(t) Tabs.Main:SetName(t) end)
-Library:RegisterLabel("Tab_UI",        Tabs.UISettings.ButtonLabel,  function(t) Tabs.UISettings:SetName(t) end)
-Library:RegisterLabel("Sub_Features",  SubTabs.Features.ButtonLabel, function(t) SubTabs.Features:SetName(t) end)
-Library:RegisterLabel("Group_Ctrl",    LeftGroup.TitleLabel)
-Library:RegisterLabel("Group_Colors",  RightGroup.TitleLabel)
-
-Library:SetupLanguage("es", {
-    Tab_Main     = "Principal",
-    Tab_UI       = "Configuración",
-    Sub_Features = "Funciones",
-    Group_Ctrl   = "Controles",
-    Group_Colors = "Colores",
-    MyToggle     = { Text = "Activar función" },
-    MySlider     = { Text = "Velocidad" },
-    MyDrop       = { Text = "Modo", Values = { "Modo A", "Modo B" } },
-})
-
-MenuManager.MenuTab:AddDivider()
-MenuManager.MenuTab:AddDropdown("LanguageSelect", {
-    Text    = "Language",
-    Values  = { "English", "Español" },
-    Default = 1,
+-- ── Aimbot ────────────────────────────────────────────────────────────────────
+AimLeft:AddToggle("Aimbot", {
+    Text          = "Aimbot",
+    Default       = false,
+    RegisterPanic = true,
     Callback = function(val)
-        Library:SetLanguage(val == "Español" and "es" or nil)
+        -- aimbot logic
     end,
-})
-```
-
----
-
-### Tips and Patterns
-
-**Reading values at any time**
-```lua
--- Toggles:
-print(Toggles.MyToggle.Value)    -- boolean
-
--- Options (sliders, dropdowns, inputs, keypickers, colorpickers):
-print(Options.MySlider.Value)    -- number
-print(Options.MyDrop.Value)      -- string
-print(Options.MyInput.Value)     -- string
-print(Options.FlyBind.Value)     -- string (key name)
-print(Options.MyColor.Value)     -- Color3 or ColorSequence
-```
-
-**Subscribe without replacing the main Callback**
-```lua
-Toggles.MyToggle:OnChanged(function(val)
-    print("extra subscriber:", val)
-end)
-
-Options.MySlider:OnChanged(function(val)
-    print("slider changed:", val)
-end)
-```
-
-**Programmatically set values**
-```lua
-Toggles.MyToggle:SetValue(true)
-Options.MySlider:SetValue(100)
-Options.MyDrop:SetValue("Mode B")
-Options.MyInput:SetValue("hello")
-Options.FlyBind:SetValue("G")
-Options.MyColor:SetValueRGB(Color3.fromRGB(0, 255, 0))
-```
-
-**Disable / re-enable elements**
-```lua
-Toggles.MyToggle:SetDisabled(true)
-Options.MySlider:SetDisabled(false)
-Options.MyDrop:SetDisabled(true)
-```
-
-**Hide / show elements**
-```lua
-Toggles.MyToggle:SetVisible(false)
-Options.MySlider:SetVisible(true)
-```
-
-**Rename elements**
-```lua
-Toggles.MyToggle:SetText("New Label")
-Options.MySlider:SetText("New Slider Label")
-Options.MyDrop:SetText("New Dropdown Label")
-```
-
-**Check keybind state from code**
-```lua
-if Options.FlyBind:GetState() then
-    -- key is active right now
-end
-```
-
-**Safe heartbeat loop**
-```lua
-Library:OnUnload(function() Library.Unloaded = true end)
-
-game:GetService("RunService").Heartbeat:Connect(function(dt)
-    if Library.Unloaded then return end
-    -- logic here
-end)
-```
-
-**Panic setup with button fallback**
-```lua
--- Always register panic toggles after their elements are created:
-LeftGroup:AddToggle("Aimbot", { Text = "Aimbot", Default = false })
-LeftGroup:AddToggle("ESP",    { Text = "ESP",    Default = false })
-
-Library:PanicFuncs({ "Aimbot", "ESP" })
--- Library.AllowPanic is now true — MenuManager will show the panic section.
--- Pressing the panic keybind (while toggle is armed) calls Library:Panic().
--- The existing double-click Panic button in MenuManager also calls Library:Panic().
-```
-
-**Dynamic dropdown values (e.g. re-populate on refresh)**
-```lua
-local items = { "Apple", "Banana", "Cherry" }
-
-LeftGroup:AddDropdown("ItemPicker", {
-    Text = "Item", Values = items, Default = 1,
-    Callback = function(val) print(val) end,
+}):AddKeyPicker("AimbotBind", {
+    Text    = "Aimbot",
+    Default = "Q",
+    Mode    = "Hold",
 })
 
--- Later, update the list:
-local newItems = { "Mango", "Strawberry" }
-Options.ItemPicker:SetValues(newItems)
-```
+AimLeft:AddDivider()
 
-**Disable specific dropdown values**
-```lua
-Options.MyDrop:SetDisabledValues({ "Mode C", "Mode D" })
--- "Mode C" and "Mode D" are greyed out and unselectable
-```
-
-**Chained sub-sliders for XY or width/height pairs**
-```lua
-LeftGroup:AddSlider("OffX", {
-    Text = "Offset X", Default = 0, Min = -500, Max = 500, Rounding = 0, Compact = true,
-}):AddSlider("OffY", {
-    Text = "Offset Y", Default = 0, Min = -500, Max = 500, Rounding = 0, Compact = true,
-})
-```
-
-**Chained color pickers — multiple colors on one label**
-```lua
--- Chain up to three color pickers from one Label or Toggle:
-LeftGroup:AddLabel("Colors")
-    :AddColorPicker("Color1", { Default = Color3.fromRGB(255,  80,  80), Title = "Primary" })
-    :AddColorPicker("Color2", { Default = Color3.fromRGB( 80, 255,  80), Title = "Secondary" })
-    :AddColorPicker("Color3", { Default = Color3.fromRGB( 80,  80, 255), Title = "Tertiary" })
-```
-
-**Deep dependency nesting**
-```lua
--- CursorType == "Dot" → show Dot settings
--- Within Dot settings, DotOutline == true → show thickness slider
-
-LeftGroup:AddDropdown("CursorType", {
-    Text = "Cursor Type", Values = { "Mouse", "Dot", "Plus" }, Default = 1,
+AimLeft:AddSlider("AimbotFOV", {
+    Text     = "FOV",
+    Default  = 80,
+    Min = 1, Max = 360, Rounding = 0,
+    Suffix   = "°",
+    Callback = function(val) end,
 })
 
-local DotDep = LeftGroup:AddDependencyBox()
-
-DotDep:AddSlider("DotScale", { Text = "Dot Size", Default = 5, Min = 1, Max = 20, Rounding = 0 })
-
-DotDep:AddToggle("DotOutline", { Text = "Outline", Default = false })
-
-local DotOutlineDep = DotDep:AddDependencyBox()
-DotOutlineDep:AddSlider("DotOutlineThick", {
-    Text = "Outline Thickness", Default = 1, Min = 0.1, Max = 4, Rounding = 1, Suffix = "px"
+AimLeft:AddSlider("AimbotSmoothing", {
+    Text     = "Smoothing",
+    Default  = 5,
+    Min = 0, Max = 20, Rounding = 1,
+    Callback = function(val) end,
 })
-DotOutlineDep:SetupDependencies({ { Toggles.DotOutline, true } })
 
-DotDep:SetupDependencies({ { Options.CursorType, "Dot" } })
-```
+AimLeft:AddDropdown("AimbotPart", {
+    Text    = "Hit Part",
+    Values  = { "Head", "Torso", "Nearest" },
+    Default = "Head",
+    Callback = function(val) end,
+})
 
-**Player target dropdown with callback**
-```lua
-LeftGroup:AddDropdown("Target", {
-    Text               = "Target Player",
-    SpecialType        = "Player",
-    ExcludeLocalPlayer = true,
-    Callback           = function(val)
-        local player = game.Players:FindFirstChild(val)
-        if player then
-            print("Targeting:", player.DisplayName)
+-- Filters on right
+AimRight:AddDropdown("AimbotTarget", {
+    Text        = "Target",
+    SpecialType = "Player",
+    AllowNull   = true,
+    Callback = function(player) end,
+    ReturnInstanceInstead = true,
+})
+
+AimRight:AddToggle("AimbotTeamCheck", {
+    Text    = "Team Check",
+    Default = true,
+    Callback = function(val) end,
+})
+
+-- ── Movement ─────────────────────────────────────────────────────────────────
+MovLeft:AddToggle("SpeedHack", {
+    Text          = "Speed Hack",
+    Default       = false,
+    RegisterPanic = true,
+    Callback = function(val) end,
+})
+
+local SpeedDepbox = MovLeft:AddDependencyBox()
+SpeedDepbox:AddSlider("WalkSpeed", {
+    Text     = "Walk Speed",
+    Default  = 16,
+    Min = 1, Max = 200, Rounding = 0,
+    Callback = function(val)
+        local char = game.Players.LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.WalkSpeed = val
         end
     end,
 })
-```
+SpeedDepbox:SetupDependencies({ { Toggles.SpeedHack, true } })
 
-**Persist notification (no auto-dismiss)**
-```lua
-Library:Notify({
-    Title       = "Status",
-    Description = "Feature is running.",
-    Persist     = true,
-})
-```
+MovLeft:AddDivider()
 
-**Dialog with timed button**
-```lua
-local Dlg = Window:AddDialog("WarnDialog", {
-    Title       = "Warning",
-    Description = "This action cannot be undone. Please wait before confirming.",
+MovLeft:AddToggle("Fly", {
+    Text          = "Fly",
+    Default       = false,
+    RegisterPanic = true,
+    Callback = function(val) end,
+}):AddKeyPicker("FlyBind", {
+    Text    = "Fly",
+    Default = "F",
+    Mode    = "Toggle",
+    SyncToggleState = true,
 })
 
-Dlg:AddFooterButton("Cancel", {
-    Title   = "Cancel",
-    Variant = "Secondary",
-    Func    = function() Dlg:Dismiss() end,
+-- ── ESP ───────────────────────────────────────────────────────────────────────
+VisLeft:AddToggle("ESPEnabled", {
+    Text    = "Enable ESP",
+    Default = false,
+    Callback = function(val) end,
+}):AddColorPicker("ESPColor", {
+    Title    = "ESP Color",
+    Default  = Color3.fromRGB(255, 50, 50),
+    Callback = function(color) end,
 })
 
-Dlg:AddFooterButton("Confirm", {
-    Title    = "Confirm",
-    Variant  = "Destructive",
-    WaitTime = 3,  -- button is disabled for 3 seconds
-    Func     = function()
-        print("Confirmed after wait")
-        Dlg:Dismiss()
+local ESPDepbox = VisLeft:AddDependencyBox()
+ESPDepbox:AddToggle("ESPBoxes",     { Text = "Boxes",    Default = true, Callback = function() end })
+ESPDepbox:AddToggle("ESPNames",     { Text = "Names",    Default = true, Callback = function() end })
+ESPDepbox:AddToggle("ESPDistance",  { Text = "Distance", Default = false, Callback = function() end })
+ESPDepbox:SetupDependencies({ { Toggles.ESPEnabled, true } })
+
+-- ── Chams ─────────────────────────────────────────────────────────────────────
+VisRight:AddToggle("ChamsEnabled", {
+    Text    = "Enable Chams",
+    Default = false,
+    Callback = function(val) end,
+}):AddColorPicker("ChamsColor", {
+    Title        = "Chams Color",
+    Default      = Color3.fromRGB(0, 80, 255),
+    Transparency = true,
+    Callback = function(color, transparency) end,
+})
+
+-- ── Misc ──────────────────────────────────────────────────────────────────────
+MiscLeft:AddButton({
+    Text        = "Rejoin Server",
+    DoubleClick = true,
+    Tooltip     = "Double-click to rejoin",
+    Func = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId)
     end,
 })
 
-Dlg:Resize()
-```
+MiscLeft:AddInput("ServerNote", {
+    Text        = "Note",
+    Default     = "",
+    Placeholder = "Write anything...",
+    Callback = function(text) end,
+})
 
-**SetLayoutOrder to reorder tabs**
-```lua
--- Move a tab to position 1 (leftmost):
-Tabs.Main:SetLayoutOrder(1)
-Tabs.UISettings:SetLayoutOrder(2)
-```
+MiscLeft:AddDivider()
 
-**Rename a tab dynamically**
-```lua
-Tabs.Main:SetName("Home")  -- also resizes the tab button
-```
+MiscLeft:AddLabel("Panic Bind"):AddKeyPicker("CustomPanic", {
+    Default  = "End",
+    Mode     = "Press",
+    Callback = function()
+        Library:Panic()
+    end,
+})
 
-**Switch tabs from code**
-```lua
-Tabs.Main:ShowTab()
-SubTabs.Features:ShowTab()
-```
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+MenuManager:SetLibrary(Library)
 
-**IgnoreTabSizes — force all tabs to the same width**
-```lua
-Library.IgnoreTabSizes    = true   -- main tabs
-Library.IgnoreSubTabSizes = true   -- sub-tabs
-```
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetSubFolder("SnowFallDemo")
+ThemeManager:SetFolder("SnowFallDemo")
+ThemeManager:ApplyTheme("Default")
 
-**Custom cursor with accent color tracking**
-```lua
-Library.ShowCustomCursor = true
-Library.CursorType       = "Plus"
--- CursorColor = nil means it follows AccentColor automatically
--- Override to a fixed color:
-Library.CursorColor = Color3.fromRGB(255, 100, 100)
-```
+ThemeManager:BuildThemeSection(Tabs.UISettings)
+SaveManager:BuildConfigSection(Tabs.UISettings)
+MenuManager:BuildMenuSection(Tabs.UISettings)
 
-**Controller support**
-```lua
-Library.ControllerSupport    = true
-Library.ControllerNavType    = "Dpad"       -- or "Joystick"
-Library.ControllerNavSensitivity = 5        -- higher = faster cursor
-```
+Library:SetupLanguage("es", {
+    Aimbot          = { Text = "Apuntador" };
+    AimbotFOV       = { Text = "Campo de visión" };
+    AimbotSmoothing = { Text = "Suavidad" };
+    AimbotPart      = { Text = "Parte objetivo", Values = { "Cabeza", "Torso", "Más cercana" } };
+    SpeedHack       = { Text = "Truco de velocidad" };
+    WalkSpeed       = { Text = "Velocidad" };
+    Fly             = { Text = "Volar" };
+    ESPEnabled      = { Text = "Activar ESP" };
+})
 
----
-
-### Element Quick Reference
-
-| Element | Creation | Key | Stored in |
-|---------|----------|-----|-----------|
-| Toggle | `group:AddToggle(idx, {})` | Index string | `Library.Toggles` |
-| Slider | `group:AddSlider(idx, {})` | Index string | `Library.Options` |
-| Dropdown | `group:AddDropdown(idx, {})` | Index string | `Library.Options` |
-| Input | `group:AddInput(idx, {})` | Index string | `Library.Options` |
-| ColorPicker | `element:AddColorPicker(idx, {})` | Index string | `Library.Options` |
-| KeyPicker | `element:AddKeyPicker(idx, {})` | Index string | `Library.Options` |
-| Button | `group:AddButton({})` | — | — |
-| Label | `group:AddLabel(text)` | — | — |
-| Divider | `group:AddDivider()` | — | — |
-| Blank | `group:AddBlank()` | — | — |
-| DependencyBox | `group:AddDependencyBox()` | — | — |
-
----
-
-### Method Quick Reference
-
-**Library**
-```lua
-Library:CreateWindow(info)             -- create and return the Window
-Library:Toggle(state?)                 -- open/close UI
-Library:SetLowercaseMode(bool)         -- lowercase all text
-Library:UpdateNotificationAreas()      -- refresh notification position
-Library:OnUnload(fn)                   -- register cleanup callback
-Library:Unload()                       -- destroy the library
-Library:Notify(info | msg, time?)      -- show a notification
-Library:Panic()                        -- disable all PanicFunctions toggles
-Library:PanicFuncs(names)              -- register toggle index strings for panic
-Library:AddDraggableLabel(text)        -- create a floating draggable label
-Library:SetWatermark(text)             -- (deprecated) set watermark text
-Library:SetWatermarkVisibility(bool)   -- (deprecated)
-Library:SetupLanguage(code, table)     -- register translations
-Library:SetLanguage(code | nil)        -- switch active language
-Library:RegisterLabel(key, label, fn?) -- register label for language system
-Library:AddToRegistry(inst, props)     -- register instance for theme sync
-Library:GetColor(key)                  -- get current theme Color3 by key
-```
-
-**Window**
-```lua
-Window:AddTab(name, iconName?)         -- add a main tab
-Window:AddDialog(idx, info)            -- add a modal dialog
-Window:SetWindowTitle(text)            -- update main title
-Window:SetBackgroundImage(assetId)     -- set background image
-```
-
-**Tab / SubTab**
-```lua
-Tab:AddTab(name, iconName?)            -- add a sub-tab
-Tab:AddLeftGroupbox(name)              -- add a left groupbox
-Tab:AddRightGroupbox(name)             -- add a right groupbox
-Tab:ShowTab()                          -- switch to this tab
-Tab:HideTab()                          -- hide this tab
-Tab:SetName(text)                      -- rename + resize button
-Tab:SetLayoutOrder(n)                  -- reorder
-```
-
-**Groupbox**
-```lua
-group:AddToggle(idx, info)
-group:AddSlider(idx, info)
-group:AddDropdown(idx, info)
-group:AddInput(idx, info)
-group:AddButton(info)
-group:AddLabel(text)
-group:AddDivider()
-group:AddBlank()
-group:AddDependencyBox()
-group:AddTabbox()
-group:AddLeftTabbox()
-```
-
-**Tabbox**
-```lua
-tabbox:AddTab(name, iconName?)
-```
-
-**DependencyBox**
-```lua
-depbox:SetupDependencies({ { element, value }, ... })
-depbox:AddToggle(...)    -- same as groupbox
-depbox:AddSlider(...)
-depbox:AddDropdown(...)
-depbox:AddInput(...)
-depbox:AddButton(...)
-depbox:AddLabel(...)
-depbox:AddDivider()
-depbox:AddDependencyBox()
-```
-
-**Button**
-```lua
-button:AddButton(info)          -- add a sub-button
-button:SetText(text)
-button:SetDisabled(bool)
-button:SetVisible(bool)
-```
-
-**Toggle**
-```lua
-toggle:SetValue(bool)
-toggle:SetText(text)
-toggle:SetDisabled(bool)
-toggle:SetVisible(bool)
-toggle:OnChanged(fn)
-toggle:AddColorPicker(idx, info)
-toggle:AddKeyPicker(idx, info)
-```
-
-**Slider**
-```lua
-slider:SetValue(n)
-slider:SetMin(n)
-slider:SetMax(n)
-slider:SetText(text)
-slider:SetPrefix(text)
-slider:SetSuffix(text)
-slider:SetDisabled(bool)
-slider:SetVisible(bool)
-slider:OnChanged(fn)
-slider:AddSlider(idx, info)     -- chain a sub-slider
-```
-
-**Dropdown**
-```lua
-dropdown:SetValue(str)
-dropdown:SetValues(table)
-dropdown:SetDisabledValues(table)
-dropdown:SetText(text)
-dropdown:SetDisabled(bool)
-dropdown:SetVisible(bool)
-dropdown:OnChanged(fn)
-```
-
-**Input**
-```lua
-input:SetValue(str)
-input:SetDisabled(bool)
-input:SetVisible(bool)
-input:OnChanged(fn)
-```
-
-**ColorPicker**
-```lua
-colorpicker:SetValue(color3 | colorsequence)
-colorpicker:SetValueRGB(color3)
-colorpicker:SetDisabled(bool)
-colorpicker:Show()
-colorpicker:Hide()
-colorpicker:OnChanged(fn)
-colorpicker:AddColorPicker(idx, info)   -- chain another picker
-```
-
-**KeyPicker**
-```lua
-keypicker:SetValue(keyName)
-keypicker:GetState()                    -- returns boolean
-keypicker:SetModePickerVisibility(bool)
-keypicker:OnChanged(fn)
-keypicker:OnClick(fn)
-keypicker:DoClick()
-```
-
-**DraggableLabel**
-```lua
-label:SetText(text)
-label:SetVisible(bool)
-label:Destroy()
-```
-
-**Dialog**
-```lua
-dialog:Dismiss()
-dialog:SetTitle(text)
-dialog:SetDescription(text)
-dialog:AddFooterButton(key, info)
-dialog:RemoveFooterButton(key)
-dialog:SetButtonDisabled(key, bool)
-dialog:SetButtonOrder(key, n)
-dialog:Resize()
-dialog:AddToggle(idx, info)
-dialog:AddInput(idx, info)
+Library:OnUnload(function()
+    Library.Unloaded = true
+    -- disconnect your connections here
+end)
 ```
