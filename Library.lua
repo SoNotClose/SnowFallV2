@@ -274,42 +274,32 @@ local Library = {
 
     -- variables --
     VideoLink = "";
-    
     Toggled = false;
     ToggleKeybind = nil;
-
     IsMobile = false;
     DevicePlatform = Enum.Platform.None;
-
     CanDrag = true;
     CantDragForced = false;
     DragMode   = "Live"; -- "Live" | "Ghost"
     ResizeMode = "Live"; -- "Live" | "Ghost"
-
     Unloaded = false;
 	ControllerSupport = false;
 	SafeMode = false;
-
     LowercaseMode = false;
     MenuMark = false;
     WindowX = 0;
     WindowY = 0;
-
     IgnoreTabSizes    = false;
     IgnoreSubTabSizes = false;
     IgnoreLimit = 6;
     TabSize = 5;
-
-    EnlargeSubtabs = true;   -- give subtab buttons a uniform minimum width
-    SubtabSize     = 16;     -- minimum width = SubtabSize * 16 px (same scale as TabSize)
-
+    EnlargeSubtabs = true;   
+    SubtabSize     = 8;      
     ControllerNavType = "Dpad";
     ControllerNavSensitivity = 5;
-
     -- icons --
     IconColor = nil; -- nil = follow AccentColor; set a Color3 to override globally
     IconSide  = "Left";                        -- global default: "Left" | "Right" | "Middle"
-
     -- tab switch animations --
     -- Options: "None","Fade","SlideUp","SlideDown","SlideLeft","SlideRight","Scale","Bounce","Elastic"
     TabSwitchAnimation     = "None";
@@ -9664,8 +9654,9 @@ end
 
             local _subIconExtra = (typeof(IconName) == "string" and IconName ~= "") and (_ICON_SZ + _ICON_GAP) or 0
             local _subBtnTextW = Library:GetTextBounds(SubName, Library.Font, 14)
+            -- EnlargeSubtabs: flat fixed width so every button is identical
             local subBtnW = Library.EnlargeSubtabs
-                and math.max(_subBtnTextW, (Library.SubtabSize or 16) * 16)
+                and ((Library.SubtabSize or 8) * 16)
                 or _subBtnTextW
             subBtnW = subBtnW + 22 + _subIconExtra
 
@@ -9711,7 +9702,7 @@ end
                     SubTab.Name = Name
                     local _w = Library:GetTextBounds(Name, Library.Font, 14)
                     local w = Library.EnlargeSubtabs
-                        and math.max(_w, (Library.SubtabSize or 16) * 16)
+                        and ((Library.SubtabSize or 8) * 16)
                         or _w
                     SubBtn.Size = UDim2.new(0, w + 22 + _subIconExtra, 0.9, 0)
                     SubBtnLabel.Text = Name
