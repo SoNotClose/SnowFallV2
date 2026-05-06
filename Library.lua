@@ -4880,29 +4880,35 @@ do
             Tooltip.Disabled = Toggle.Disabled
         end
 
+        local _toggleTween
+
         function Toggle:Display()
+            local targetBG, targetBorder, targetText
+
             if Toggle.Disabled then
                 ToggleLabel.TextColor3 = Library.DisabledTextColor
-
-                ToggleInner.BackgroundColor3 = Toggle.Value and Library.DisabledAccentColor or Library.MainColor
-                ToggleInner.BorderColor3 = Library.DisabledOutlineColor
-
+                targetBG     = Toggle.Value and Library.DisabledAccentColor or Library.MainColor
+                targetBorder = Library.DisabledOutlineColor
                 Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and "DisabledAccentColor" or "MainColor"
                 Library.RegistryMap[ToggleInner].Properties.BorderColor3 = "DisabledOutlineColor"
                 Library.RegistryMap[ToggleLabel].Properties.TextColor3 = "DisabledTextColor"
-
-                return
+            else
+                targetText   = Toggle.Risky and Library.RiskColor or Color3.new(1, 1, 1)
+                ToggleLabel.TextColor3 = targetText
+                targetBG     = Toggle.Value and Library.AccentColor or Library.MainColor
+                targetBorder = Toggle.Value and Library.AccentColorDark or Library.OutlineColor
+                Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and "AccentColor" or "MainColor"
+                Library.RegistryMap[ToggleInner].Properties.BorderColor3 = Toggle.Value and "AccentColorDark" or "OutlineColor"
+                Library.RegistryMap[ToggleLabel].Properties.TextColor3 = Toggle.Risky and "RiskColor" or nil
             end
 
-            ToggleLabel.TextColor3 = Toggle.Risky and Library.RiskColor or Color3.new(1, 1, 1)
-
-            ToggleInner.BackgroundColor3 = Toggle.Value and Library.AccentColor or Library.MainColor
-            ToggleInner.BorderColor3 = Toggle.Value and Library.AccentColorDark or Library.OutlineColor
-
-            Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and "AccentColor" or "MainColor"
-            Library.RegistryMap[ToggleInner].Properties.BorderColor3 = Toggle.Value and "AccentColorDark" or "OutlineColor"
-
-            Library.RegistryMap[ToggleLabel].Properties.TextColor3 = Toggle.Risky and "RiskColor" or nil
+            if _toggleTween then _toggleTween:Cancel() end
+            _toggleTween = TweenService:Create(
+                ToggleInner,
+                TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                { BackgroundColor3 = targetBG, BorderColor3 = targetBorder }
+            )
+            _toggleTween:Play()
         end
 
         function Toggle:OnChanged(Func)
@@ -9655,9 +9661,8 @@ end
 
             local _subIconExtra = (typeof(IconName) == "string" and IconName ~= "") and (_ICON_SZ + _ICON_GAP) or 0
             local _subBtnTextW = Library:GetTextBounds(SubName, Library.Font, 14)
-            local subBtnW = Library.IgnoreSubTabSizes
-                and math.max(_subBtnTextW, Library.TabSize * 16)
-                or _subBtnTextW
+            -- subtabs always use uniform minimum width so they never look tiny
+            local subBtnW = math.max(_subBtnTextW, Library.TabSize * 16)
             subBtnW = subBtnW + 22 + _subIconExtra
 
             local SubBtn = Library:Create("Frame", {
@@ -9700,9 +9705,7 @@ end
                 if typeof(Name) == "string" then
                     SubTab.Name = Name
                     local _w = Library:GetTextBounds(Name, Library.Font, 14)
-                    local w = Library.IgnoreSubTabSizes
-                        and math.max(_w, Library.TabSize * 16)
-                        or _w
+                    local w = math.max(_w, Library.TabSize * 16)
                     SubBtn.Size = UDim2.new(0, w + 22 + _subIconExtra, 0.9, 0)
                     SubBtnLabel.Text = Name
                 end
