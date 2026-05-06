@@ -596,6 +596,8 @@ function Library:_ApplyTabIcon(textLabel, parentFrame, iconName, side, iconColor
     return il
 end
 
+local _tabAnimTweens = {}  -- [frame] = active tween, cancelled before each new animation
+
 function Library:_PlayTabAnimation(frame)
     if not (frame and frame.Parent) then return end
 
@@ -604,6 +606,27 @@ function Library:_PlayTabAnimation(frame)
     if anim == "None" or not anim then return end
 
     t = math.clamp(t, 0.01, 2)
+
+    -- Cancel any in-flight tween and reset position to rest before starting a new animation.
+    -- Without this, rapid tab switches capture a mid-flight position as `orig` and the
+    -- tween restores to the wrong place, causing permanent misplacement.
+    if _tabAnimTweens[frame] then
+        pcall(function() _tabAnimTweens[frame]:Cancel() end)
+        _tabAnimTweens[frame] = nil
+    end
+    pcall(function() frame.Position = UDim2.new(0, 0, 0, 0) end)
+
+    local rest = UDim2.new(0, 0, 0, 0)
+
+    local function trackTween(tw)
+        _tabAnimTweens[frame] = tw
+        tw.Completed:Connect(function()
+            if _tabAnimTweens[frame] == tw then
+                _tabAnimTweens[frame] = nil
+            end
+        end)
+        tw:Play()
+    end
 
     if anim == "Fade" then
         local parent = frame.Parent
@@ -631,34 +654,26 @@ function Library:_PlayTabAnimation(frame)
                    or (anim == "Elastic" and Enum.EasingStyle.Elastic)
                    or Enum.EasingStyle.Quad
         pcall(function()
-            local orig = frame.Position
-            frame.Position = UDim2.new(orig.X.Scale, orig.X.Offset, orig.Y.Scale + 0.07, orig.Y.Offset)
-            TweenService:Create(frame, TweenInfo.new(t, style, Enum.EasingDirection.Out),
-                { Position = orig }):Play()
+            frame.Position = UDim2.new(0, 0, 0.07, 0)
+            trackTween(TweenService:Create(frame, TweenInfo.new(t, style, Enum.EasingDirection.Out), { Position = rest }))
         end)
 
     elseif anim == "SlideDown" then
         pcall(function()
-            local orig = frame.Position
-            frame.Position = UDim2.new(orig.X.Scale, orig.X.Offset, orig.Y.Scale - 0.07, orig.Y.Offset)
-            TweenService:Create(frame, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                { Position = orig }):Play()
+            frame.Position = UDim2.new(0, 0, -0.07, 0)
+            trackTween(TweenService:Create(frame, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = rest }))
         end)
 
     elseif anim == "SlideLeft" then
         pcall(function()
-            local orig = frame.Position
-            frame.Position = UDim2.new(orig.X.Scale + 0.07, orig.X.Offset, orig.Y.Scale, orig.Y.Offset)
-            TweenService:Create(frame, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                { Position = orig }):Play()
+            frame.Position = UDim2.new(0.07, 0, 0, 0)
+            trackTween(TweenService:Create(frame, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = rest }))
         end)
 
     elseif anim == "SlideRight" then
         pcall(function()
-            local orig = frame.Position
-            frame.Position = UDim2.new(orig.X.Scale - 0.07, orig.X.Offset, orig.Y.Scale, orig.Y.Offset)
-            TweenService:Create(frame, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                { Position = orig }):Play()
+            frame.Position = UDim2.new(-0.07, 0, 0, 0)
+            trackTween(TweenService:Create(frame, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = rest }))
         end)
 
     elseif anim == "Scale" then
@@ -9332,13 +9347,13 @@ end
                     end
                 end
 
-                BoxOuter.Size = UDim2.new(1, 0, 0, (20 * DPIScale + Size) + 2 + 2)
+                BoxOuter.Size = UDim2.new(1, 0, 0, (20 * DPIScale + Size) + 2 + 8)
             end
 
             Groupbox.Container = Container
             setmetatable(Groupbox, BaseGroupbox)
 
-            Groupbox:AddBlank(3)
+            Groupbox:AddBlank(5)
             Groupbox:Resize()
 
             Tab.Groupboxes[Info.Name] = Groupbox
@@ -9700,12 +9715,28 @@ end
             function SubTab:SetName(Name)
                 if typeof(Name) == "string" then
                     SubTab.Name = Name
-                    local _w = Library:GetTextBounds(Name, Library.Font, 14)
-                    local w = Library.EnlargeSubtabs
-                        and ((Library.SubtabSize or 8) * 16)
-                        or _w
-                    SubBtn.Size = UDim2.new(0, w + 22 + _subIconExtra, 0.9, 0)
                     SubBtnLabel.Text = Name
+                    if Library.EnlargeSubtabs and Tab._SubTabScrollArea then
+                        -- Let the shared redistribution handle all widths
+                        local scrollArea = Tab._SubTabScrollArea
+                        local aw = scrollArea.AbsoluteSize.X
+                        if aw > 0 then
+                            local btns = {}
+                            for _, ch in ipairs(scrollArea:GetChildren()) do
+                                if not ch:IsA("UIListLayout") then table.insert(btns, ch) end
+                            end
+                            local n = #btns
+                            if n > 0 then
+                                local w = math.floor((aw - math.max(0, n - 1)) / n)
+                                for _, btn in ipairs(btns) do
+                                    btn.Size = UDim2.new(0, w, 0.9, 0)
+                                end
+                            end
+                        end
+                    else
+                        local _w = Library:GetTextBounds(Name, Library.Font, 14)
+                        SubBtn.Size = UDim2.new(0, _w + 22 + _subIconExtra, 0.9, 0)
+                    end
                 end
             end
 
@@ -9891,11 +9922,11 @@ end
                             Size = Size + Element.Size.Y.Offset
                         end
                     end
-                    BoxOuter.Size = UDim2.new(1, 0, 0, (20 * DPIScale + Size) + 2 + 2)
+                    BoxOuter.Size = UDim2.new(1, 0, 0, (20 * DPIScale + Size) + 2 + 8)
                 end
                 Groupbox.Container = Container
                 setmetatable(Groupbox, BaseGroupbox)
-                Groupbox:AddBlank(3)
+                Groupbox:AddBlank(5)
                 Groupbox:Resize()
                 SubTab.Groupboxes[Info.Name] = Groupbox
                 return Groupbox
@@ -10077,6 +10108,34 @@ end
                     end
                 end
             end)
+
+            -- When EnlargeSubtabs is on, shrink/grow all subtab buttons to fill the bar
+            -- width equally. Runs on every AddTab call so adding a new subtab re-narrows
+            -- all existing ones. The AbsoluteSize connection handles initial render +
+            -- window resize without needing an explicit caller each time.
+            if Library.EnlargeSubtabs and Tab._SubTabScrollArea then
+                local scrollArea = Tab._SubTabScrollArea
+                local function _redistributeSubtabs()
+                    local aw = scrollArea.AbsoluteSize.X
+                    if aw <= 0 then return end
+                    local btns = {}
+                    for _, ch in ipairs(scrollArea:GetChildren()) do
+                        if not ch:IsA("UIListLayout") then
+                            table.insert(btns, ch)
+                        end
+                    end
+                    local n = #btns
+                    if n == 0 then return end
+                    local w = math.floor((aw - math.max(0, n - 1)) / n)
+                    for _, btn in ipairs(btns) do
+                        btn.Size = UDim2.new(0, w, 0.9, 0)
+                    end
+                end
+                _redistributeSubtabs()
+                if not Tab._SubTabSizeConn then
+                    Tab._SubTabSizeConn = scrollArea:GetPropertyChangedSignal("AbsoluteSize"):Connect(_redistributeSubtabs)
+                end
+            end
 
             Tab.SubTabs[SubName] = SubTab
             if not Tab.ActiveSubTabName and not Tab.HasDirectElements then
