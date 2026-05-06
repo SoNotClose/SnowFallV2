@@ -300,6 +300,9 @@ local Library = {
     IgnoreLimit = 6;
     TabSize = 5;
 
+    EnlargeSubtabs = true;   -- give subtab buttons a uniform minimum width
+    SubtabSize     = 16;     -- minimum width = SubtabSize * 16 px (same scale as TabSize)
+
     ControllerNavType = "Dpad";
     ControllerNavSensitivity = 5;
 
@@ -534,8 +537,8 @@ end
 -- Attaches a lucide/custom icon next to a TextLabel inside a button frame.
 -- Returns the created ImageLabel, or nil if the icon was not found.
 -- side: "Left" | "Right" | "Middle"  (falls back to Library.IconSide)
-local _ICON_SZ  = 14  -- icon pixel size
-local _ICON_GAP = 4   -- gap between icon and text
+local _ICON_SZ  = 11  -- icon pixel size
+local _ICON_GAP = 7   -- gap between icon and text
 
 function Library:_ApplyTabIcon(textLabel, parentFrame, iconName, side, iconColor, zIndex)
     if not (textLabel and parentFrame) then return nil end
@@ -9661,8 +9664,9 @@ end
 
             local _subIconExtra = (typeof(IconName) == "string" and IconName ~= "") and (_ICON_SZ + _ICON_GAP) or 0
             local _subBtnTextW = Library:GetTextBounds(SubName, Library.Font, 14)
-            -- subtabs always use uniform minimum width so they never look tiny
-            local subBtnW = math.max(_subBtnTextW, Library.TabSize * 16)
+            local subBtnW = Library.EnlargeSubtabs
+                and math.max(_subBtnTextW, (Library.SubtabSize or 16) * 16)
+                or _subBtnTextW
             subBtnW = subBtnW + 22 + _subIconExtra
 
             local SubBtn = Library:Create("Frame", {
@@ -9688,10 +9692,11 @@ end
             Library:AddToRegistry(SubBtnInner, { BackgroundColor3 = "BackgroundColor" })
 
             local SubBtnLabel = Library:CreateLabel({
-                Position = UDim2.new(0, 5, 0, 0);
-                Size = UDim2.new(1, -10, 1, 0);
+                Position = UDim2.new(0, 0, 0, 0);
+                Size = UDim2.new(1, 0, 1, 0);
                 TextSize = 14;
                 Text = SubName;
+                TextXAlignment = Enum.TextXAlignment.Center;
                 SkipLowercase = true;
                 ZIndex = 6;
                 Parent = SubBtnInner;
@@ -9705,7 +9710,9 @@ end
                 if typeof(Name) == "string" then
                     SubTab.Name = Name
                     local _w = Library:GetTextBounds(Name, Library.Font, 14)
-                    local w = math.max(_w, Library.TabSize * 16)
+                    local w = Library.EnlargeSubtabs
+                        and math.max(_w, (Library.SubtabSize or 16) * 16)
+                        or _w
                     SubBtn.Size = UDim2.new(0, w + 22 + _subIconExtra, 0.9, 0)
                     SubBtnLabel.Text = Name
                 end
