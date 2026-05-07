@@ -281,7 +281,7 @@ function MenuManager:BuildMenuSection(Tab)
     NotifTab:AddDropdown("NotificationBarSide", {
         Text    = "Bar Side";
         Values  = { "Left", "Top", "Right", "Bottom" };
-        Default = Library.NotificationBarSide or "Left";
+        Default = Library.NotificationBarSide or "Bottom";
         Callback = function(val)
             Library.NotificationBarSide = val
         end;
