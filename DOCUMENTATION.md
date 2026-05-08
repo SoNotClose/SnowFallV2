@@ -1169,7 +1169,13 @@ A horizontal rule to visually separate element groups.
 Groupbox:AddDivider()
 ```
 
-No parameters. Just inserts a thin horizontal line.
+Inserts a thin horizontal line.
+
+### Titled Divider
+
+```lua
+Groupbox:AddDivider("Section")
+```
 
 ---
 
