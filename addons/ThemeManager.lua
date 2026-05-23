@@ -53,6 +53,7 @@ local ThemeManager = {} do
     ThemeManager.CurrentTheme = "Default"
     ThemeManager.DefaultThemeName = "Default"
 
+    -- Tracks the last theme that was actually applied so "Set As Default" works with AutoSetTheme on
     local lastSetTheme = nil
 
     ThemeManager.BuiltInThemes = {
@@ -87,6 +88,10 @@ local ThemeManager = {} do
         ["Dark Matter"]  = { clock = 0, speed = 1 },
         ["Red Inferno"]  = { clock = 0, speed = 1 },
     }
+
+    -- SpeedSliders table lives here (module-level) so GetThemeSpeed can read .Value directly
+    -- without touching lib.Options at all — avoids the nil Value crash on some executors
+    local SpeedSliderObjects = {}
 
     local CurrentThemeLabel = nil
     local DefaultThemeLabel = nil
@@ -139,13 +144,19 @@ local ThemeManager = {} do
         SetColorPickersDisabled(false)
     end
 
+    -- Reads speed directly from the slider object stored in SpeedSliderObjects.
+    -- Falls back to AnimatedThemeVars.speed if the slider doesn't exist yet.
+    -- Never touches lib.Options to avoid the nil Value crash.
     local function GetThemeSpeed(themeName)
-        local lib = ThemeManager.Library
-        local vars = AnimatedThemeVars[themeName]
-        local sliderKey = "ThemeManager_Speed_" .. themeName:gsub(" ", "_")
-        if lib and lib.Options[sliderKey] then
-            return lib.Options[sliderKey].Value or 1
+        local sliderObj = SpeedSliderObjects[themeName]
+        if sliderObj then
+            -- slider.Value is set by the library on the object itself, always safe
+            local v = rawget(sliderObj, "Value")
+            if v and type(v) == "number" then
+                return v
+            end
         end
+        local vars = AnimatedThemeVars[themeName]
         return vars and vars.speed or 1
     end
 
@@ -157,19 +168,17 @@ local ThemeManager = {} do
         local vars = AnimatedThemeVars[themeName]
         if not vars then return end
 
-        local lib = ThemeManager.Library
-
         if themeName == "Rainbow" then
             AnimationConnection = RunService.RenderStepped:Connect(function(delta)
                 if not ThemeManager.Library then return end
                 vars.clock = vars.clock + delta
 
-                local speed = GetThemeSpeed("Rainbow")
-                local hue    = (vars.clock * speed * 0.1) % 1
-                local accent = Color3.fromHSV(hue, 0.8, 1)
-                local bgHue  = (hue + 0.5) % 1
-                local bg     = Color3.fromHSV(bgHue, 0.6, 0.12)
-                local main   = Color3.fromHSV(bgHue, 0.5, 0.18)
+                local speed   = GetThemeSpeed("Rainbow")
+                local hue     = (vars.clock * speed * 0.1) % 1
+                local accent  = Color3.fromHSV(hue, 0.8, 1)
+                local bgHue   = (hue + 0.5) % 1
+                local bg      = Color3.fromHSV(bgHue, 0.6, 0.12)
+                local main    = Color3.fromHSV(bgHue, 0.5, 0.18)
                 local outline = Color3.fromHSV(hue, 0.4, 0.3)
 
                 ApplyColors({
@@ -185,13 +194,13 @@ local ThemeManager = {} do
                 if not ThemeManager.Library then return end
                 vars.clock = vars.clock + delta
 
-                local speed = GetThemeSpeed("Dark Matter")
-                local pulse      = (math.sin(vars.clock * speed * 0.8) + 1) / 2
-                local accentHue  = 0.77
-                local accent     = Color3.fromHSV(accentHue, 0.85, 0.35 + pulse * 0.55)
-                local bg         = Color3.fromHSV(accentHue, 0.6,  0.04 + pulse * 0.07)
-                local main       = Color3.fromHSV(accentHue, 0.5,  0.08 + pulse * 0.07)
-                local outline    = Color3.fromHSV(accentHue, 0.4,  0.12 + pulse * 0.10)
+                local speed     = GetThemeSpeed("Dark Matter")
+                local pulse     = (math.sin(vars.clock * speed * 0.8) + 1) / 2
+                local accentHue = 0.77
+                local accent    = Color3.fromHSV(accentHue, 0.85, 0.35 + pulse * 0.55)
+                local bg        = Color3.fromHSV(accentHue, 0.6,  0.04 + pulse * 0.07)
+                local main      = Color3.fromHSV(accentHue, 0.5,  0.08 + pulse * 0.07)
+                local outline   = Color3.fromHSV(accentHue, 0.4,  0.12 + pulse * 0.10)
 
                 ApplyColors({
                     AccentColor     = accent,
@@ -206,13 +215,13 @@ local ThemeManager = {} do
                 if not ThemeManager.Library then return end
                 vars.clock = vars.clock + delta
 
-                local speed = GetThemeSpeed("Red Inferno")
-                local pulse      = (math.sin(vars.clock * speed * 0.6) + 1) / 2
-                local accentHue  = pulse * 0.08
-                local accent     = Color3.fromHSV(accentHue, 1, 1)
-                local bg         = Color3.fromHSV(0.02, 0.8,  0.06 + pulse * 0.06)
-                local main       = Color3.fromHSV(0.02, 0.7,  0.10 + pulse * 0.06)
-                local outline    = Color3.fromHSV(accentHue, 0.6, 0.22 + pulse * 0.10)
+                local speed     = GetThemeSpeed("Red Inferno")
+                local pulse     = (math.sin(vars.clock * speed * 0.6) + 1) / 2
+                local accentHue = pulse * 0.08
+                local accent    = Color3.fromHSV(accentHue, 1, 1)
+                local bg        = Color3.fromHSV(0.02, 0.8,  0.06 + pulse * 0.06)
+                local main      = Color3.fromHSV(0.02, 0.7,  0.10 + pulse * 0.06)
+                local outline   = Color3.fromHSV(accentHue, 0.6, 0.22 + pulse * 0.10)
 
                 ApplyColors({
                     AccentColor     = accent,
@@ -224,6 +233,7 @@ local ThemeManager = {} do
         end
     end
 
+    --[[ WEB THEMES TEMPORARILY DISABLED
     local WebThemeCache = nil
 
     local function FetchWebThemes()
@@ -268,6 +278,7 @@ local ThemeManager = {} do
         writefile(ThemeManager.Folder .. "/themes/" .. name .. ".json", result.Body)
         return true
     end
+    ]]
 
     function ThemeManager:SetLibrary(library)
         self.Library = library
@@ -384,6 +395,8 @@ local ThemeManager = {} do
         local isBuiltIn = true
         if content then
             if self:IsAnimatedTheme(content) then
+                -- SetValue triggers OnChanged which is now live (past _loading),
+                -- but _loading guard was only needed for construction — this is intentional
                 self.Library.Options.ThemeManager_AnimatedThemeList:SetValue(content)
                 ThemeManager.DefaultThemeName = content
                 UpdateThemeLabels()
@@ -514,7 +527,11 @@ local ThemeManager = {} do
 
     function ThemeManager:CreateThemeManager(groupbox)
         local lib = self.Library
-        local _loading = true  -- prevents OnChanged from firing during UI construction
+
+        -- Blocks all three dropdown OnChanged callbacks from firing while the UI
+        -- is being constructed (dropdowns fire OnChanged immediately on creation
+        -- due to Default = 1, which would call ApplyTheme before LoadDefault runs)
+        local _loading = true
 
         local _L = {}
         _L.bgColor     = groupbox:AddLabel('Background color')
@@ -540,8 +557,11 @@ local ThemeManager = {} do
             lib:RegisterLabel("ThemeManager_themesGroup", groupbox.TitleLabel)
         end
 
+        -- AutoSetTheme: ONLY controls whether picking a dropdown instantly applies the theme.
+        -- It does NOT affect "Set As Default" — that always works via lastSetTheme.
         groupbox:AddToggle('ThemeManager_AutoSetTheme', { Text = 'Auto Set Theme', Default = true })
 
+        -- "Set Theme" button is inside a DependencyBox so it only shows when AutoSetTheme is OFF
         local ManualThemeDepbox = groupbox:AddDependencyBox()
         local SetThemeButton = ManualThemeDepbox:AddButton('Set Theme', function()
             local theme = GetCurrentlySelectedTheme(self.Library)
@@ -555,10 +575,12 @@ local ThemeManager = {} do
         lib:RegisterLabel("ThemeManager_setThemeBtn", SetThemeButton.Label)
         ManualThemeDepbox:SetupDependencies({ { lib.Toggles.ThemeManager_AutoSetTheme, false } })
 
+        -- "Set As Default" reads lastSetTheme (the last thing actually applied by ApplyTheme).
+        -- This works correctly whether AutoSetTheme is on or off.
         local _setDefaultBtn = groupbox:AddButton('Set As Default', function()
             local theme = lastSetTheme or GetCurrentlySelectedTheme(self.Library)
             if not theme then
-                self.Library:Notify('No theme selected or applied yet', 2)
+                self.Library:Notify('No theme has been applied yet', 2)
                 return
             end
             self:SaveDefault(theme)
@@ -605,7 +627,9 @@ local ThemeManager = {} do
             Default   = 1,
         })
 
-        local SpeedSliders = {}
+        -- Speed sliders — one per animated theme, hidden by default.
+        -- Stored in SpeedSliderObjects (module-level) so GetThemeSpeed can read
+        -- slider.Value directly without going through lib.Options (avoids nil crash).
         for _, themeName in ipairs(AnimatedThemes) do
             local key = "ThemeManager_Speed_" .. themeName:gsub(" ", "_")
             local slider = groupbox:AddSlider(key, {
@@ -617,20 +641,24 @@ local ThemeManager = {} do
                 Visible  = false,
             })
             slider:OnChanged(function()
+                -- Keep AnimatedThemeVars in sync as a fallback
                 if AnimatedThemeVars[themeName] then
                     AnimatedThemeVars[themeName].speed = slider.Value
                 end
             end)
-            SpeedSliders[themeName] = slider
+            -- Store the slider object so GetThemeSpeed can safely read .Value from it
+            SpeedSliderObjects[themeName] = slider
         end
 
         self.Library.Options.ThemeManager_AnimatedThemeList:OnChanged(function()
             if _loading then return end
             local selected = self.Library.Options.ThemeManager_AnimatedThemeList.Value
 
+            -- Show the speed slider only for the currently selected animated theme
             for _, themeName in ipairs(AnimatedThemes) do
-                if SpeedSliders[themeName] then
-                    SpeedSliders[themeName]:SetVisible(selected == themeName)
+                local sliderObj = SpeedSliderObjects[themeName]
+                if sliderObj and sliderObj.SetVisible then
+                    sliderObj:SetVisible(selected == themeName)
                 end
             end
 
@@ -645,6 +673,7 @@ local ThemeManager = {} do
 
         groupbox:AddDivider()
 
+        --[[ WEB THEMES TEMPORARILY DISABLED
         local webThemes = FetchWebThemes()
         groupbox:AddDropdown('ThemeManager_WebThemeList', {
             Text      = 'Web Theme List',
@@ -682,6 +711,7 @@ local ThemeManager = {} do
         lib:RegisterLabel("ThemeManager_downloadThemeBtn", _downloadThemeBtn.Label)
 
         groupbox:AddDivider()
+        ]]
 
         groupbox:AddInput('ThemeManager_CustomThemeName', { Text = 'Custom theme name' })
         local _createThemeBtn = groupbox:AddButton('Create theme', function()
@@ -829,14 +859,11 @@ local ThemeManager = {} do
             ThemeManager_AutoSetTheme         = { Text = "Tema automático" },
             ThemeManager_ThemeList            = { Text = "Temas integrados" },
             ThemeManager_AnimatedThemeList    = { Text = "Temas animados" },
-            ThemeManager_WebThemeList         = { Text = "Temas web" },
             ThemeManager_CustomThemeList      = { Text = "Temas personalizados" },
             ThemeManager_CustomThemeName      = { Text = "Nombre del tema" },
             ThemeManager_VideoURL             = { Text = "Fondo de video" },
             ThemeManager_setThemeBtn          = "Aplicar tema",
             ThemeManager_setDefaultBtn        = "Establecer por defecto",
-            ThemeManager_refreshWebBtn        = "Actualizar temas web",
-            ThemeManager_downloadThemeBtn     = "Descargar tema",
             ThemeManager_createThemeBtn       = "Crear tema",
             ThemeManager_exportThemeBtn       = "Exportar tema",
             ThemeManager_loadThemeBtn         = "Cargar tema",
@@ -858,14 +885,11 @@ local ThemeManager = {} do
             ThemeManager_AutoSetTheme         = { Text = "Thème automatique" },
             ThemeManager_ThemeList            = { Text = "Thèmes intégrés" },
             ThemeManager_AnimatedThemeList    = { Text = "Thèmes animés" },
-            ThemeManager_WebThemeList         = { Text = "Thèmes web" },
             ThemeManager_CustomThemeList      = { Text = "Thèmes personnalisés" },
             ThemeManager_CustomThemeName      = { Text = "Nom du thème" },
             ThemeManager_VideoURL             = { Text = "Fond vidéo" },
             ThemeManager_setThemeBtn          = "Appliquer le thème",
             ThemeManager_setDefaultBtn        = "Définir par défaut",
-            ThemeManager_refreshWebBtn        = "Actualiser thèmes web",
-            ThemeManager_downloadThemeBtn     = "Télécharger le thème",
             ThemeManager_createThemeBtn       = "Créer un thème",
             ThemeManager_exportThemeBtn       = "Exporter le thème",
             ThemeManager_loadThemeBtn         = "Charger le thème",
@@ -877,6 +901,8 @@ local ThemeManager = {} do
             ThemeManager_clearVideoBgBtn      = "Effacer le fond vidéo",
         })
 
+        -- All UI elements are now fully constructed.
+        -- Lift the loading guard, then load the saved default theme.
         _loading = false
         self:LoadDefault()
 
