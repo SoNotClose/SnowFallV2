@@ -53,6 +53,8 @@ local ThemeManager = {} do
     ThemeManager.CurrentTheme = "Default"
     ThemeManager.DefaultThemeName = "Default"
 
+    local lastSetTheme = nil
+
     ThemeManager.BuiltInThemes = {
         ['Default']        = {  1, { FontColor = "ffffff", MainColor = "1c1c1c", AccentColor = "f0f0f0", BackgroundColor = "141414", OutlineColor = "323232" } },
         ['BBot']           = {  2, { FontColor = "ffffff", MainColor = "1e1e1e", AccentColor = "7e48a3", BackgroundColor = "232323", OutlineColor = "141414" } },
@@ -81,7 +83,7 @@ local ThemeManager = {} do
     local CurrentAnimatedTheme = nil
 
     local AnimatedThemeVars = {
-        Rainbow     = { clock = 0, speed = 1 },
+        Rainbow          = { clock = 0, speed = 1 },
         ["Dark Matter"]  = { clock = 0, speed = 1 },
         ["Red Inferno"]  = { clock = 0, speed = 1 },
     }
@@ -311,6 +313,7 @@ local ThemeManager = {} do
         if self:IsAnimatedTheme(theme) then
             StartAnimation(theme)
             ThemeManager.CurrentTheme = theme
+            lastSetTheme = theme
             UpdateThemeLabels()
             return
         end
@@ -348,6 +351,7 @@ local ThemeManager = {} do
         self:ThemeUpdate()
 
         ThemeManager.CurrentTheme = theme
+        lastSetTheme = theme
         UpdateThemeLabels()
     end
 
@@ -510,6 +514,7 @@ local ThemeManager = {} do
 
     function ThemeManager:CreateThemeManager(groupbox)
         local lib = self.Library
+        local _loading = true  -- prevents OnChanged from firing during UI construction
 
         local _L = {}
         _L.bgColor     = groupbox:AddLabel('Background color')
@@ -537,7 +542,8 @@ local ThemeManager = {} do
 
         groupbox:AddToggle('ThemeManager_AutoSetTheme', { Text = 'Auto Set Theme', Default = true })
 
-        local SetThemeButton = groupbox:AddButton('Set Theme', function()
+        local ManualThemeDepbox = groupbox:AddDependencyBox()
+        local SetThemeButton = ManualThemeDepbox:AddButton('Set Theme', function()
             local theme = GetCurrentlySelectedTheme(self.Library)
             if not theme then
                 self.Library:Notify('No theme selected', 2)
@@ -546,17 +552,13 @@ local ThemeManager = {} do
             self:ApplyTheme(theme)
             self.Library:Notify(string.format('Applied theme: %s', theme), 2)
         end)
-        SetThemeButton:SetVisible(false)
         lib:RegisterLabel("ThemeManager_setThemeBtn", SetThemeButton.Label)
-
-        self.Library.Toggles.ThemeManager_AutoSetTheme:OnChanged(function()
-            SetThemeButton:SetVisible(not self.Library.Toggles.ThemeManager_AutoSetTheme.Value)
-        end)
+        ManualThemeDepbox:SetupDependencies({ { lib.Toggles.ThemeManager_AutoSetTheme, false } })
 
         local _setDefaultBtn = groupbox:AddButton('Set As Default', function()
-            local theme = GetCurrentlySelectedTheme(self.Library)
+            local theme = lastSetTheme or GetCurrentlySelectedTheme(self.Library)
             if not theme then
-                self.Library:Notify('No theme selected', 2)
+                self.Library:Notify('No theme selected or applied yet', 2)
                 return
             end
             self:SaveDefault(theme)
@@ -586,6 +588,7 @@ local ThemeManager = {} do
         })
 
         self.Library.Options.ThemeManager_ThemeList:OnChanged(function()
+            if _loading then return end
             if self.Library.Toggles.ThemeManager_AutoSetTheme.Value then
                 self.Library.Options.ThemeManager_AnimatedThemeList:SetValue(nil)
                 self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
@@ -622,6 +625,7 @@ local ThemeManager = {} do
         end
 
         self.Library.Options.ThemeManager_AnimatedThemeList:OnChanged(function()
+            if _loading then return end
             local selected = self.Library.Options.ThemeManager_AnimatedThemeList.Value
 
             for _, themeName in ipairs(AnimatedThemes) do
@@ -716,6 +720,7 @@ local ThemeManager = {} do
         })
 
         self.Library.Options.ThemeManager_CustomThemeList:OnChanged(function()
+            if _loading then return end
             local selected = self.Library.Options.ThemeManager_CustomThemeList.Value
             if self.Library.Toggles.ThemeManager_AutoSetTheme.Value then
                 if selected and selected ~= '' then
@@ -733,6 +738,7 @@ local ThemeManager = {} do
             self.Library:Notify(string.format('Loaded theme %q', name))
         end)
         lib:RegisterLabel("ThemeManager_loadThemeBtn", _loadThemeBtn.Label)
+
         local _overwriteThemeBtn = groupbox:AddButton('Overwrite theme', function()
             local name = self.Library.Options.ThemeManager_CustomThemeList.Value
             if not name or name == '' then self.Library:Notify('No custom theme selected', 2) return end
@@ -740,6 +746,7 @@ local ThemeManager = {} do
             self.Library:Notify(string.format('Overwrote theme %q', name))
         end)
         lib:RegisterLabel("ThemeManager_overwriteThemeBtn", _overwriteThemeBtn.Label)
+
         local _deleteThemeBtn = groupbox:AddButton('Delete theme', function()
             local name = self.Library.Options.ThemeManager_CustomThemeList.Value
             if not name or name == '' then self.Library:Notify('No custom theme selected', 2) return end
@@ -755,11 +762,13 @@ local ThemeManager = {} do
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
         end)
         lib:RegisterLabel("ThemeManager_deleteThemeBtn", _deleteThemeBtn.Label)
+
         local _refreshListBtn = groupbox:AddButton('Refresh list', function()
             self.Library.Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
             self.Library.Options.ThemeManager_CustomThemeList:SetValue(nil)
         end)
         lib:RegisterLabel("ThemeManager_refreshListBtn", _refreshListBtn.Label)
+
         local _resetDefaultBtn = groupbox:AddButton('Reset default', function()
             local success = pcall(delfile, self.Folder .. '/themes/default.txt')
             if not success then
@@ -795,6 +804,7 @@ local ThemeManager = {} do
             end
         end)
         lib:RegisterLabel("ThemeManager_setVideoBgBtn", _setVideoBgBtn.Label)
+
         local _clearVideoBgBtn = groupbox:AddButton('Clear video background', function()
             if self.Library.InnerVideoBackground then
                 self.Library.InnerVideoBackground.Playing = false
@@ -867,6 +877,7 @@ local ThemeManager = {} do
             ThemeManager_clearVideoBgBtn      = "Effacer le fond vidéo",
         })
 
+        _loading = false
         self:LoadDefault()
 
         local function UpdateTheme() self:ThemeUpdate() end
