@@ -488,7 +488,6 @@ local FetchIcons, Icons = pcall(function()
         game:HttpGet("https://gitlab.com/upio/lucide-roblox-direct/-/raw/main/source.lua")
     ) :: () -> IconModule)()
 end)
-]]
 		
 --local FetchIcons, Icons = false, nil
 
