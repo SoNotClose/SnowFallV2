@@ -481,12 +481,15 @@ type IconModule = {
     Icons: { string },
     GetAsset: (Name: string) -> Icon?,
 }
-
+		
+-[[ down for some reason rip
 local FetchIcons, Icons = pcall(function()
     return (loadstring(
         game:HttpGet("https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua")
     ) :: () -> IconModule)()
 end)
+]]
+local FetchIcons, Icons = false, nil
 
 function IsValidCustomIcon(Icon: string)
     return typeof(Icon) == "string"
